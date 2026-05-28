@@ -1,0 +1,25 @@
+[package]
+name = "ekza-bevy-sdk"
+version = "0.2.0"
+edition = "2024"
+description = "SDK surface for Ekza-Stellar character ids and Bevy 3D model integration"
+
+[features]
+default = ["bevy"]
+bevy = ["dep:bevy", "dep:reqwest"]
+
+[dependencies]
+bevy = { version = "0.18.0", optional = true }
+reqwest = { version = "0.12.15", features = ["blocking"], optional = true }
+serde = { version = "1.0.219", features = ["derive"] }
+
+[dev-dependencies]
+serde_json = "1.0.140"
+
+[[example]]
+name = "model_viewer"
+required-features = ["bevy"]
+
+[[example]]
+name = "model_cache"
+required-features = ["bevy"]
