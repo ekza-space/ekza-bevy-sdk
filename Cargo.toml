@@ -1,6 +1,6 @@
 [package]
 name = "ekza-bevy-sdk"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 description = "SDK surface for Ekza-Stellar character ids and Bevy 3D model integration"
 

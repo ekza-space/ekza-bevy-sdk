@@ -22,10 +22,18 @@ pub enum EkzaCharacter {
     Toka,
     Wang,
     Cube,
+    /// CC0 VRM humanoid avatar (glTF 2.0 binary loaded through the glTF pipeline).
+    Paco,
 }
 
 impl EkzaCharacter {
-    pub const ALL: [Self; 4] = [Self::Ipfs, Self::Toka, Self::Wang, Self::Cube];
+    pub const ALL: [Self; 5] = [
+        Self::Ipfs,
+        Self::Toka,
+        Self::Wang,
+        Self::Cube,
+        Self::Paco,
+    ];
 
     pub fn as_str(self) -> &'static str {
         match self {
@@ -33,6 +41,7 @@ impl EkzaCharacter {
             Self::Toka => "Toka",
             Self::Wang => "Wang",
             Self::Cube => "Cube",
+            Self::Paco => "Paco",
         }
     }
 
@@ -42,6 +51,7 @@ impl EkzaCharacter {
             Self::Toka => "toka",
             Self::Wang => "wang",
             Self::Cube => "cube",
+            Self::Paco => "paco",
         }
     }
 }
@@ -78,7 +88,7 @@ pub const IPFS_CHARACTER_URL: &str =
 pub const IPFS_CHARACTER_CACHE_PATH: &str =
     "downloaded/QmWMYVUF2pa4GkoMgquyY8nmYjQJDP9yxnSBvjVqH7EJQr.glb";
 
-pub const BUILTIN_MODEL_MANIFEST: [ModelEntry; 4] = [
+pub const BUILTIN_MODEL_MANIFEST: [ModelEntry; 5] = [
     ModelEntry {
         character: EkzaCharacter::Ipfs,
         display_name: "IPFS",
@@ -111,6 +121,18 @@ pub const BUILTIN_MODEL_MANIFEST: [ModelEntry; 4] = [
         character: EkzaCharacter::Cube,
         display_name: "Cube",
         source: ModelSource::PrimitiveFallback,
+        locomotion_animations: false,
+    },
+    ModelEntry {
+        character: EkzaCharacter::Paco,
+        display_name: "Paco",
+        // VRM 0.x is a glTF 2.0 binary; the asset is staged as `.glb` so the
+        // standard glTF loader picks it up. The avatar ships no animation clips,
+        // so it renders as a static skinned mesh (locomotion_animations: false).
+        source: ModelSource::LocalGlb {
+            path: "downloaded/paco.glb",
+            scene_label: "Scene0",
+        },
         locomotion_animations: false,
     },
 ];
@@ -150,6 +172,10 @@ mod tests {
         assert_eq!(
             serde_json::to_string(&EkzaCharacter::Cube).unwrap(),
             "\"cube\""
+        );
+        assert_eq!(
+            serde_json::to_string(&EkzaCharacter::Paco).unwrap(),
+            "\"paco\""
         );
     }
 

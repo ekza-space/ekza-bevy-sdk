@@ -60,7 +60,7 @@ fn parse_config() -> Result<Config, String> {
             }
             "--character" => {
                 let Some(raw) = args.next() else {
-                    return Err("--character requires ipfs, toka, wang, or cube".to_string());
+                    return Err("--character requires ipfs, toka, wang, cube, or paco".to_string());
                 };
                 character = Some(parse_character(&raw)?);
             }
@@ -85,6 +85,7 @@ fn parse_character(raw: &str) -> Result<EkzaCharacter, String> {
         "toka" => Ok(EkzaCharacter::Toka),
         "wang" => Ok(EkzaCharacter::Wang),
         "cube" => Ok(EkzaCharacter::Cube),
+        "paco" => Ok(EkzaCharacter::Paco),
         _ => Err(format!("unknown character: {raw}")),
     }
 }
@@ -147,6 +148,6 @@ fn print_usage() {
     eprintln!(
         "Usage:
   cargo run --example model_cache -- --asset-root PATH [--all]
-  cargo run --example model_cache -- --asset-root PATH --character ipfs|toka|wang|cube"
+  cargo run --example model_cache -- --asset-root PATH --character ipfs|toka|wang|cube|paco"
     );
 }

@@ -92,7 +92,7 @@ fn parse_config() -> Result<ViewerConfig, String> {
             }
             "--character" => {
                 let Some(raw) = args.next() else {
-                    return Err("--character requires ipfs, toka, wang, or cube".to_string());
+                    return Err("--character requires ipfs, toka, wang, cube, or paco".to_string());
                 };
                 character = parse_character(&raw)?;
             }
@@ -142,6 +142,7 @@ fn parse_character(raw: &str) -> Result<EkzaCharacter, String> {
         "toka" => Ok(EkzaCharacter::Toka),
         "wang" => Ok(EkzaCharacter::Wang),
         "cube" => Ok(EkzaCharacter::Cube),
+        "paco" => Ok(EkzaCharacter::Paco),
         _ => Err(format!("unknown character: {raw}")),
     }
 }
@@ -425,7 +426,7 @@ fn exit_on_escape(keys: Res<ButtonInput<KeyCode>>, mut exit: MessageWriter<AppEx
 fn print_usage() {
     eprintln!(
         "Usage:
-  cargo run --example model_viewer -- [--character ipfs|toka|wang|cube] [--asset-root PATH]
+  cargo run --example model_viewer -- [--character ipfs|toka|wang|cube|paco] [--asset-root PATH]
   cargo run --example model_viewer -- --glb path/to/model.glb [--scene-label Scene0]"
     );
 }
