@@ -6,6 +6,7 @@
 
 use serde::{Deserialize, Serialize};
 
+pub mod passport;
 pub mod validation;
 
 pub use validation::{
@@ -27,13 +28,7 @@ pub enum EkzaCharacter {
 }
 
 impl EkzaCharacter {
-    pub const ALL: [Self; 5] = [
-        Self::Ipfs,
-        Self::Toka,
-        Self::Wang,
-        Self::Cube,
-        Self::Paco,
-    ];
+    pub const ALL: [Self; 5] = [Self::Ipfs, Self::Toka, Self::Wang, Self::Cube, Self::Paco];
 
     pub fn as_str(self) -> &'static str {
         match self {

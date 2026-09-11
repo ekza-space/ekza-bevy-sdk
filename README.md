@@ -2,7 +2,9 @@
 
 `ekza-bevy-sdk` is the first extracted SDK surface for using Ekza-Stellar universe character identities and 3D model metadata outside the Omoba Bevy game.
 
-This repository is the standalone SDK home. Omoba Bevy consumes it locally through a sibling path dependency, and the crate is shaped so it can later be published and consumed as a dependency by other Bevy projects.
+This repository is the standalone SDK home. Omoba Bevy pins an exact Git revision
+of this crate, so a clean game checkout does not require a sibling SDK checkout.
+Local Cargo overrides can be used while developing the two repositories together.
 
 ## Public Surface
 
@@ -10,6 +12,10 @@ This repository is the standalone SDK home. Omoba Bevy consumes it locally throu
 - `BUILTIN_MODEL_MANIFEST` - built-in character-to-model metadata.
 - `validation::validate_glb_bytes` - typed GLB validation report with extensible rules and issues.
 - `validation::validate_glb_file` - file-level GLB validation helper for tooling.
+- `passport` - serde-only purchased library, canonical avatar, approved project
+  rendition and consumed-ticket types. `ProtectedAvatar::validate_bytes` checks
+  exact size, caller-computed SHA-256 and GLB envelope;
+  `validate_consumed_ticket` binds trusted approval to the exact roster rendition.
 - `is_valid_glb_bytes` - compatibility shorthand for the default GLB validation rules.
 - `bevy::EkzaModelCatalog` - Bevy resource-friendly catalog of `Scene` and `Gltf` handles.
 - `bevy::load_builtin_model_catalog` - resolves local downloaded GLBs and caches remote GLBs under a consumer asset root.
@@ -39,6 +45,13 @@ Viewer controls: hold right mouse and drag to orbit, mouse wheel to zoom, `Esc` 
 
 ## Current Boundaries
 
-- This crate does not perform account auth, entitlement checks, CDN signing, or asset licensing enforcement yet.
+- Passport structs describe evidence, not ownership by themselves. The game
+  server must consume a one-use project/session-bound ticket at its configured
+  trusted passport API. Never authorize from a client-submitted mint, slug or
+  JSON object. The native HTTP, SHA-256 and curated importer reference is the
+  sibling Omoba `omoba-passport` crate; its runtime validates embedded humanoid
+  skinning and the idle/walk/attack/cast/death profile before loading bytes.
+- This crate does not perform account auth, network entitlement checks, CDN
+  signing or legal asset licensing enforcement.
 - Remote model downloads are blocking and intended for the current desktop prototype path.
 - Gameplay protocol and MOBA-specific state remain in the game crates for now.
