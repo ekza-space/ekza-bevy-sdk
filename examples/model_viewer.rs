@@ -5,7 +5,7 @@ use bevy::{
     camera::primitives::Aabb,
     input::mouse::{MouseMotion, MouseWheel},
     prelude::*,
-    scene::SceneRoot,
+    world_serialization::WorldAssetRoot,
 };
 use ekza_bevy_sdk::{
     EkzaCharacter, GlbValidationRules,
@@ -229,7 +229,7 @@ fn setup(
 
     if let Some(scene) = handles.scene {
         commands.spawn((
-            SceneRoot(scene),
+            WorldAssetRoot(scene),
             Transform::from_translation(Vec3::ZERO),
             ViewedModelRoot {
                 label: handles.label.clone(),
@@ -266,7 +266,7 @@ fn setup(
     commands.spawn((
         DirectionalLight {
             illuminance: 25_000.0,
-            shadows_enabled: true,
+            shadow_maps_enabled: true,
             ..default()
         },
         Transform::from_rotation(Quat::from_euler(EulerRot::ZYX, 0.0, 0.75, -0.8)),

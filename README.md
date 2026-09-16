@@ -6,6 +6,13 @@ This repository is the standalone SDK home. Omoba Bevy pins an exact Git revisio
 of this crate, so a clean game checkout does not require a sibling SDK checkout.
 Local Cargo overrides can be used while developing the two repositories together.
 
+## Engine compatibility
+
+This branch targets Bevy 0.19.1 and Rust 1.95 or later for the default Bevy feature.
+Use a pinned older SDK revision with Bevy 0.18; Bevy handle/resource types from
+different minor engine releases cannot be mixed. Identity, Passport and GLB
+validation remain available with `default-features = false`.
+
 ## Public Surface
 
 - `EkzaCharacter` - stable serde-compatible character ids (`ipfs`, `toka`, `wang`, `cube`).
@@ -17,7 +24,7 @@ Local Cargo overrides can be used while developing the two repositories together
   exact size, caller-computed SHA-256 and GLB envelope;
   `validate_consumed_ticket` binds trusted approval to the exact roster rendition.
 - `is_valid_glb_bytes` - compatibility shorthand for the default GLB validation rules.
-- `bevy::EkzaModelCatalog` - Bevy resource-friendly catalog of `Scene` and `Gltf` handles.
+- `bevy::EkzaModelCatalog` - Bevy resource-friendly catalog of `WorldAsset` and `Gltf` handles.
 - `bevy::load_builtin_model_catalog` - resolves local downloaded GLBs and caches remote GLBs under a consumer asset root.
 
 ## Developer Tools
