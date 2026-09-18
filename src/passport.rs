@@ -79,6 +79,64 @@ pub fn validate_avatar_id(id: &str) -> Result<(), &'static str> {
     }
 }
 
+/// Which approval a consumer is willing to accept: its own project id plus the
+/// exact platform/profile selector its runtime can load.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SupportSelector {
+    pub project_id: String,
+    pub platform: String,
+    pub profile: String,
+    /// Accepted rendition formats (`glb`, `vrm`, ...).
+    pub formats: Vec<String>,
+}
+
+impl SupportSelector {
+    pub fn new(project_id: &str, platform: &str, profile: &str, formats: &[&str]) -> Self {
+        Self {
+            project_id: project_id.into(),
+            platform: platform.into(),
+            profile: profile.into(),
+            formats: formats.iter().map(|format| format.to_string()).collect(),
+        }
+    }
+
+    /// Omoba desktop: `desktop` / `humanoid-glb-v1`, binary glTF only.
+    pub fn omoba_desktop() -> Self {
+        Self::new(OMOBA_PROJECT, "desktop", "humanoid-glb-v1", &["glb", "vrm"])
+    }
+}
+
+/// Generic approval check: explicit project approval, exact selector, an
+/// accepted format and a well-formed rendition hash/size.
+pub fn validate_project_support(
+    support: &ProjectSupport,
+    selector: &SupportSelector,
+) -> Result<(), &'static str> {
+    let rendition = &support.rendition;
+    if support.project_id != selector.project_id || support.status != "approved" {
+        return Err("Avatar is not explicitly approved for this project");
+    }
+    if support.platform != selector.platform
+        || support.profile != selector.profile
+        || rendition.id.is_empty()
+    {
+        return Err("Unsupported rendition compatibility profile");
+    }
+    if !selector.formats.iter().any(|format| format == &rendition.format) {
+        return Err("Rendition format is not accepted by this project");
+    }
+    if !(20..=MAX_RENDITION_BYTES).contains(&rendition.size_bytes)
+        || rendition.sha256.len() != 64
+        || !rendition
+            .sha256
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+    {
+        return Err("Invalid approved rendition size or SHA-256");
+    }
+    Ok(())
+}
+
 pub fn validate_omoba_support(support: &ProjectSupport) -> Result<(), &'static str> {
     let rendition = &support.rendition;
     if support.project_id != OMOBA_PROJECT || support.status != "approved" {
@@ -93,28 +151,65 @@ pub fn validate_omoba_support(support: &ProjectSupport) -> Result<(), &'static s
     if rendition.format != "glb" && rendition.format != "vrm" {
         return Err("Omoba requires a binary glTF rendition");
     }
-    if !(20..=MAX_RENDITION_BYTES).contains(&rendition.size_bytes)
-        || rendition.sha256.len() != 64
-        || !rendition
-            .sha256
-            .bytes()
-            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
-    {
-        return Err("Invalid approved rendition size or SHA-256");
-    }
-    Ok(())
+    validate_project_support(support, &SupportSelector::omoba_desktop())
+        .map_err(|_| "Invalid approved rendition size or SHA-256")
+}
+
+/// Protocol and filesystem slug of a paid avatar: `ekza-<sha256 hex>` over the
+/// canonical identity and the exact rendition hash. Two templates sharing a
+/// geometry never collapse into one entry, and a new rendition revision gets a
+/// new slug. Every consumer derives the same value from public catalogue data,
+/// so a game server can recompute it from a consumed ticket alone.
+pub fn protected_slug(protected: &ProtectedAvatar) -> String {
+    let key = format!(
+        "{}\n{}",
+        protected.avatar_id, protected.support.rendition.sha256
+    );
+    format!("ekza-{}", crate::sha256::sha256_hex(key.as_bytes()))
+}
+
+/// True for a well-formed [`protected_slug`] value.
+pub fn is_protected_slug(slug: &str) -> bool {
+    slug.strip_prefix("ekza-").is_some_and(|hex| {
+        hex.len() == 64
+            && hex
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+    })
 }
 
 impl ProtectedAvatar {
+    /// Omoba desktop validation (kept for the first consumer).
     pub fn validate(&self) -> Result<(), &'static str> {
         validate_avatar_id(&self.avatar_id)?;
         validate_omoba_support(&self.support)
+    }
+
+    /// Validation against any consumer's own selector.
+    pub fn validate_for(&self, selector: &SupportSelector) -> Result<(), &'static str> {
+        validate_avatar_id(&self.avatar_id)?;
+        validate_project_support(&self.support, selector)
     }
 
     /// The caller supplies SHA-256 from a trusted local implementation. Metadata
     /// equality alone never satisfies the byte integrity boundary.
     pub fn validate_bytes(&self, bytes: &[u8], actual_sha256: &str) -> Result<(), &'static str> {
         self.validate()?;
+        self.check_bytes(bytes, actual_sha256)
+    }
+
+    /// Byte check against any consumer selector.
+    pub fn validate_bytes_for(
+        &self,
+        selector: &SupportSelector,
+        bytes: &[u8],
+        actual_sha256: &str,
+    ) -> Result<(), &'static str> {
+        self.validate_for(selector)?;
+        self.check_bytes(bytes, actual_sha256)
+    }
+
+    fn check_bytes(&self, bytes: &[u8], actual_sha256: &str) -> Result<(), &'static str> {
         if bytes.len() as u64 != self.support.rendition.size_bytes
             || actual_sha256 != self.support.rendition.sha256
         {
@@ -142,6 +237,9 @@ impl ProtectedAvatar {
         Ok(())
     }
 }
+
+#[cfg(feature = "http")]
+pub mod client;
 
 #[cfg(test)]
 mod tests {
@@ -174,6 +272,20 @@ mod tests {
         assert!(asset.validate().is_err());
         asset.support.status = "approved".into();
         asset.support.project_id = "ekza-space".into();
+        assert!(asset.validate().is_err());
+    }
+
+    #[test]
+    fn generic_selector_matches_any_project() {
+        let mut asset = protected();
+        assert!(asset.validate_for(&SupportSelector::omoba_desktop()).is_ok());
+        let space = SupportSelector::new("ekza-space", "universal", "vrm-humanoid-v0", &["vrm0"]);
+        assert!(asset.validate_for(&space).is_err());
+        asset.support.project_id = "ekza-space".into();
+        asset.support.platform = "universal".into();
+        asset.support.profile = "vrm-humanoid-v0".into();
+        asset.support.rendition.format = "vrm0".into();
+        assert!(asset.validate_for(&space).is_ok());
         assert!(asset.validate().is_err());
     }
 

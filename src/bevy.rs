@@ -164,3 +164,115 @@ fn glb_handles(
         label,
     }
 }
+
+// --- Roster-driven catalog -----------------------------------------------------
+
+use crate::roster::{Roster, RosterEntry};
+
+/// Handles for every avatar in a shipped or synced roster, keyed by slug.
+/// Built from `avatars/manifest.json` under the consumer asset root; models
+/// live at `avatars/<slug>.glb` as written by `roster::sync::sync_roster`.
+#[derive(Resource, Clone, Default)]
+pub struct EkzaRosterCatalog {
+    entries: HashMap<String, EkzaModelHandles>,
+    order: Vec<String>,
+    definitions: HashMap<String, RosterEntry>,
+}
+
+impl EkzaRosterCatalog {
+    pub fn insert(&mut self, entry: RosterEntry, handles: EkzaModelHandles) {
+        if !self.entries.contains_key(&entry.slug) {
+            self.order.push(entry.slug.clone());
+        }
+        self.entries.insert(entry.slug.clone(), handles);
+        self.definitions.insert(entry.slug.clone(), entry);
+    }
+
+    /// Slugs in manifest order.
+    pub fn slugs(&self) -> impl Iterator<Item = &str> {
+        self.order.iter().map(String::as_str)
+    }
+
+    pub fn len(&self) -> usize {
+        self.order.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.order.is_empty()
+    }
+
+    pub fn definition(&self, slug: &str) -> Option<&RosterEntry> {
+        self.definitions.get(slug)
+    }
+
+    pub fn handles_for(&self, slug: &str) -> (Option<Handle<Scene>>, Option<Handle<Gltf>>) {
+        self.entries
+            .get(slug)
+            .map(|entry| (entry.scene.clone(), entry.gltf.clone()))
+            .unwrap_or((None, None))
+    }
+
+    pub fn scene(&self, slug: &str) -> Option<Handle<Scene>> {
+        self.entries.get(slug).and_then(|entry| entry.scene.clone())
+    }
+
+    /// Thumbnail asset path (`avatars/<file>`) when the roster ships one.
+    pub fn thumbnail_path(&self, slug: &str) -> Option<String> {
+        self.definitions
+            .get(slug)
+            .and_then(|entry| entry.thumbnail.as_ref())
+            .map(|file| format!("avatars/{file}"))
+    }
+}
+
+/// Read `avatars/manifest.json` under `asset_root` and queue every model whose
+/// file is present and passes GLB validation. Missing or corrupt files yield an
+/// entry with no handles so the UI can still list the avatar.
+pub fn load_roster_catalog(asset_server: &AssetServer, asset_root: &Path) -> EkzaRosterCatalog {
+    let manifest = asset_root.join("avatars").join("manifest.json");
+    let roster = match Roster::read(&manifest) {
+        Ok(roster) => roster,
+        Err(error) => {
+            warn!("No Ekza roster at {manifest:?}: {error}");
+            return EkzaRosterCatalog::default();
+        }
+    };
+    load_roster(asset_server, asset_root, &roster)
+}
+
+pub fn load_roster(asset_server: &AssetServer, asset_root: &Path, roster: &Roster) -> EkzaRosterCatalog {
+    let mut catalog = EkzaRosterCatalog::default();
+    for entry in &roster.avatars {
+        let relative = entry
+            .model
+            .clone()
+            .unwrap_or_else(|| format!("avatars/{}.glb", entry.slug));
+        let path = asset_root.join(&relative);
+        let handles = match validate_glb_file(&path, &GlbValidationRules::default()) {
+            Ok(report) if report.is_valid() => {
+                glb_handles(asset_server, &relative, "Scene0", entry.display_name.clone())
+            }
+            Ok(report) => {
+                warn!(
+                    "Ekza roster model {path:?} failed validation: {:?}",
+                    report.issues()
+                );
+                EkzaModelHandles {
+                    scene: None,
+                    gltf: None,
+                    label: entry.display_name.clone(),
+                }
+            }
+            Err(error) => {
+                warn!("Ekza roster model {path:?} is unreadable: {error}");
+                EkzaModelHandles {
+                    scene: None,
+                    gltf: None,
+                    label: entry.display_name.clone(),
+                }
+            }
+        };
+        catalog.insert(entry.clone(), handles);
+    }
+    catalog
+}

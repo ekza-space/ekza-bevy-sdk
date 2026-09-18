@@ -1,17 +1,23 @@
 [package]
 name = "ekza-bevy-sdk"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2024"
-description = "SDK surface for Ekza-Stellar character ids and Bevy 3D model integration"
+description = "Ekza avatar SDK: catalogue, verified asset cache, passport client and Bevy integration for loading Ekza avatars into 2D/3D games"
+repository = "https://github.com/ekza-space/ekza-bevy-sdk"
 
 [features]
-default = ["bevy"]
-bevy = ["dep:bevy", "dep:reqwest"]
+default = ["http", "bevy"]
+# Registry/passport HTTP clients, verified download cache and roster sync.
+http = ["dep:reqwest"]
+# Bevy resource/loader helpers. Implies `http` for remote model caching.
+bevy = ["dep:bevy", "http"]
 
 [dependencies]
 bevy = { version = "0.18.0", optional = true }
-reqwest = { version = "0.12.15", features = ["blocking"], optional = true }
+# rustls keeps mobile and Linux consumers free of a system OpenSSL dependency.
+reqwest = { version = "0.12.15", default-features = false, features = ["blocking", "json", "rustls-tls"], optional = true }
 serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
 
 [dev-dependencies]
 serde_json = "1.0.140"
@@ -23,3 +29,7 @@ required-features = ["bevy"]
 [[example]]
 name = "model_cache"
 required-features = ["bevy"]
+
+[[example]]
+name = "registry_sync"
+required-features = ["http"]

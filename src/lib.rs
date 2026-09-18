@@ -1,13 +1,43 @@
-//! Ekza Bevy SDK surface for character identity and 3D model integration.
+//! Ekza avatar SDK: bring every Ekza avatar into a 2D or 3D game.
 //!
-//! The crate is intentionally small in this first extraction slice: it owns stable
-//! character ids, model manifest metadata, GLB validation, and an optional Bevy
-//! integration layer for resolving model assets into handles.
+//! Layers, from engine-agnostic to Bevy-specific:
+//!
+//! - [`catalog`] — one [`catalog::EkzaAvatar`] shape over the free library,
+//!   the approved devnet registry and the storefront passport catalogue.
+//! - [`registry`] (`http`) — blocking clients for those public feeds.
+//! - [`cache`] (`http`) — content-addressed downloads verified by size,
+//!   SHA-256 and GLB envelope.
+//! - [`roster`] — the manifest a game ships under its asset root, plus
+//!   [`roster::sync::sync_roster`] (`http`) to fill it from the feeds.
+//! - [`store`] — runtime store for a live game: approved templates for a
+//!   selector, offline catalogue, verified on-demand install (`http`).
+//! - [`passport`] — purchased-avatar contracts; [`passport::client`] (`http`)
+//!   pairs a wallet, lists purchases, issues/consumes tickets and downloads
+//!   approved renditions.
+//! - [`validation`] — GLB validation used by every layer.
+//! - [`bevy`] (`bevy`) — resources turning roster entries into `Scene`/`Gltf`
+//!   handles.
+//!
+//! The legacy [`EkzaCharacter`] enum and [`BUILTIN_MODEL_MANIFEST`] stay for
+//! the first Omoba integration; new consumers should use the roster.
 
 use serde::{Deserialize, Serialize};
 
+pub mod catalog;
 pub mod passport;
+pub mod roster;
+pub mod sha256;
+pub mod store;
 pub mod validation;
+
+#[cfg(feature = "http")]
+pub mod cache;
+#[cfg(feature = "http")]
+pub mod registry;
+
+pub use catalog::{AvatarOrigin, AvatarRendition, EkzaAvatar, ProjectApproval, merge_avatars};
+pub use roster::{Roster, RosterEntry};
+pub use sha256::sha256_hex;
 
 pub use validation::{
     GLB_HEADER_LEN, GLB_MAGIC, GlbValidationRules, ModelFormat, ModelValidationIssue,

@@ -1,0 +1,52 @@
+{
+  "schema": "ekza.passport.catalog.v1",
+  "network": "solana-devnet",
+  "items": [
+    {
+      "avatarId": "solana:devnet:avatar-data:3bfPehBVoBKXUUzmGGVT3tgQTYkpispqUKfPW1UktASL",
+      "name": "Robert",
+      "thumbnailUrl": "https://arweave.net/gaFPebQ9hSZDa_xNHkja8CH0Qde2y41L95VQTtroWNA",
+      "support": [
+        {
+          "projectId": "ekza-space",
+          "platform": "universal",
+          "profile": "vrm-humanoid-v0",
+          "status": "approved",
+          "rendition": {
+            "id": "sha256:5e3edaf330577ee4c3f6440b8989af3722e7c800bb90eb037f1c05cdfe61fd7c",
+            "url": "https://registry.ekza.io/v1/assets/5e3edaf330577ee4c3f6440b8989af3722e7c800bb90eb037f1c05cdfe61fd7c.vrm",
+            "sha256": "5e3edaf330577ee4c3f6440b8989af3722e7c800bb90eb037f1c05cdfe61fd7c",
+            "sizeBytes": 1656464,
+            "format": "vrm0"
+          }
+        },
+        {
+          "projectId": "ekza-mirror",
+          "platform": "ios",
+          "profile": "arkit-body-v1",
+          "status": "approved",
+          "rendition": {
+            "id": "sha256:044df769160a581e95706c3a0ed395a13ef5757ed4ac66c692b1809fcc203434",
+            "url": "https://registry.ekza.io/v1/assets/044df769160a581e95706c3a0ed395a13ef5757ed4ac66c692b1809fcc203434.usdz",
+            "sha256": "044df769160a581e95706c3a0ed395a13ef5757ed4ac66c692b1809fcc203434",
+            "sizeBytes": 853959,
+            "format": "usdz"
+          }
+        },
+        {
+          "projectId": "omoba",
+          "platform": "desktop",
+          "profile": "humanoid-glb-v1",
+          "status": "approved",
+          "rendition": {
+            "id": "sha256:546ddea729486de56289aef537a16bc716c7085dd93f31c66fd9ab3d740783c2",
+            "url": "https://registry.ekza.io/v1/assets/546ddea729486de56289aef537a16bc716c7085dd93f31c66fd9ab3d740783c2.glb",
+            "sha256": "546ddea729486de56289aef537a16bc716c7085dd93f31c66fd9ab3d740783c2",
+            "sizeBytes": 1885072,
+            "format": "glb"
+          }
+        }
+      ]
+    }
+  ]
+}

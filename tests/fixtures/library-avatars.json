@@ -1,0 +1,69 @@
+{
+  "items": [
+    {
+      "id": "00df253c-4665-4cbf-b420-761a1cc4f9dd",
+      "safeId": "00df253c-4665-4cbf-b420-761a1cc4f9dd",
+      "name": "Witch",
+      "collectionId": "100avatars-r1",
+      "collectionName": "100Avatars R1",
+      "author": "Polygonal-Mind",
+      "license": "CC0",
+      "format": "VRM",
+      "description": "Avatar 039: Witch",
+      "tags": [
+        "series:R1",
+        "number:039"
+      ],
+      "modelCid": "QmRz3hsZ1YGSJwY83vBUqesKgXt6CcBnE3rVpKSXFei3m8",
+      "thumbnailCid": "QmQLNqfz3YXEgQ7mRs4q2NZK2gKvQKADscu6ReR5LHFZjD",
+      "usdzCid": "QmcKM3DrF8L6x1EQqxyqvY2bYKdPArVgoBsjN1kkjxFu9f",
+      "modelSizeBytes": 1488388,
+      "thumbnailSizeBytes": 1012950,
+      "usdzSizeBytes": 565150,
+      "usdzSha256": "029bdcee9f8fcf916456f60ab92e162998b8ab9f2fffa8a0ccef417d4136a8e6",
+      "modelUrl": "https://ekza.mypinata.cloud/ipfs/QmRz3hsZ1YGSJwY83vBUqesKgXt6CcBnE3rVpKSXFei3m8",
+      "thumbnailUrl": "https://registry.ekza.io/library/thumbnails/QmQLNqfz3YXEgQ7mRs4q2NZK2gKvQKADscu6ReR5LHFZjD",
+      "usdzUrl": "https://registry.ekza.io/library/usdz/QmcKM3DrF8L6x1EQqxyqvY2bYKdPArVgoBsjN1kkjxFu9f",
+      "thumbnailAssetPath": "/library/thumbnails/QmQLNqfz3YXEgQ7mRs4q2NZK2gKvQKADscu6ReR5LHFZjD",
+      "usdzAssetPath": "/library/usdz/QmcKM3DrF8L6x1EQqxyqvY2bYKdPArVgoBsjN1kkjxFu9f",
+      "createdAt": "2025-03-11T16:41:51.489Z",
+      "updatedAt": "2025-03-11T16:41:51.489Z",
+      "ingestedAt": "2026-08-28T23:24:25Z",
+      "starterPack": true
+    },
+    {
+      "id": "0a04d13c-0e04-45ee-98d1-ca6a293e4650",
+      "safeId": "0a04d13c-0e04-45ee-98d1-ca6a293e4650",
+      "name": "Mafiossini",
+      "collectionId": "100avatars-r1",
+      "collectionName": "100Avatars R1",
+      "author": "Polygonal-Mind",
+      "license": "CC0",
+      "format": "VRM",
+      "description": "Avatar 046: Mafiossini",
+      "tags": [
+        "series:R1",
+        "number:046"
+      ],
+      "modelCid": "QmbkpA9ktXhFZZT4EBkwTvnuzECiv86C61ZybCRveC8bbt",
+      "thumbnailCid": "QmcM3r7u7TdusGzW9Z7q3joinAeQ8U9ofFPKPH8AQkzNjL",
+      "usdzCid": null,
+      "modelSizeBytes": 1388144,
+      "thumbnailSizeBytes": 1029276,
+      "usdzSizeBytes": null,
+      "usdzSha256": null,
+      "modelUrl": "https://ekza.mypinata.cloud/ipfs/QmbkpA9ktXhFZZT4EBkwTvnuzECiv86C61ZybCRveC8bbt",
+      "thumbnailUrl": "https://ekza.mypinata.cloud/ipfs/QmcM3r7u7TdusGzW9Z7q3joinAeQ8U9ofFPKPH8AQkzNjL",
+      "usdzUrl": null,
+      "thumbnailAssetPath": "/library/thumbnails/QmcM3r7u7TdusGzW9Z7q3joinAeQ8U9ofFPKPH8AQkzNjL",
+      "usdzAssetPath": null,
+      "createdAt": "2025-03-11T16:41:51.489Z",
+      "updatedAt": "2025-03-11T16:41:51.489Z",
+      "ingestedAt": "2026-08-28T23:24:25Z",
+      "starterPack": false
+    }
+  ],
+  "total": 462,
+  "limit": 2,
+  "offset": 0
+}
