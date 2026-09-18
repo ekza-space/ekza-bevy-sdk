@@ -240,6 +240,8 @@ impl ProtectedAvatar {
 
 #[cfg(feature = "http")]
 pub mod client;
+#[cfg(feature = "http")]
+pub mod pairing;
 
 #[cfg(test)]
 mod tests {

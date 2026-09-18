@@ -1,6 +1,6 @@
 [package]
 name = "ekza-bevy-sdk"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2024"
 description = "Ekza avatar SDK: catalogue, verified asset cache, passport client and Bevy integration for loading Ekza avatars into 2D/3D games"
 repository = "https://github.com/ekza-space/ekza-bevy-sdk"
@@ -32,4 +32,8 @@ required-features = ["bevy"]
 
 [[example]]
 name = "registry_sync"
+required-features = ["http"]
+
+[[example]]
+name = "passport_pair"
 required-features = ["http"]

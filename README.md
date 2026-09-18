@@ -124,6 +124,29 @@ wear it. In Bevy, mount the store root as an asset source
 (`app.register_asset_source("ekza", AssetSourceBuilder::platform_default(root, None))`
 before `DefaultPlugins`) and load `ekza://avatars/<slug>.glb`.
 
+## Wallet pairing inside a game
+
+A game cannot block its main thread for a browser approval.
+`passport::pairing::PairingFlow` runs the device flow on a worker thread:
+
+```rust
+use ekza_bevy_sdk::passport::{client::PassportClient, pairing::{PairingFlow, PairingState, open_in_browser}};
+
+let flow = PairingFlow::start(PassportClient::new("https://avatar.ekza.io/api/passport", "my-game")?);
+// once per frame:
+match flow.state() {
+    PairingState::AwaitingApproval { user_code, verification_url, .. } => {
+        // show both; optionally open_in_browser(&verification_url) once
+    }
+    PairingState::Connected => { let session = flow.take_session(); /* owned avatars */ }
+    PairingState::Failed(reason) => { /* show it, offer retry */ }
+    _ => {}
+}
+```
+
+`cargo run --example passport_pair --no-default-features --features http -- --project my-game`
+does the same from a terminal and is a quick probe against any passport.
+
 ## Purchased avatars in a native game
 
 ```rust

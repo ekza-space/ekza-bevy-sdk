@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.1 — 2026-09-18
+
+### Added
+
+- `passport::pairing::PairingFlow`: non-blocking wallet pairing for a game
+  loop. The device flow runs on a worker thread; the UI polls a renderable
+  `PairingState` (code and link to show, connected, failed) and collects the
+  `NativeSession` once. Secrets never appear in the state. Dropping the handle
+  cancels the attempt.
+- `passport::pairing::open_in_browser`: opens the approval page in the default
+  browser on desktop, only for HTTPS or explicit-localhost links.
+- `examples/passport_pair`: engine-free CLI that pairs a wallet, lists the
+  avatars it owns for a project selector and optionally installs them through
+  `AvatarStore`. Doubles as an integration probe against any passport.
+
 ## 0.4.0 — 2026-09-18
 
 The SDK now delivers the whole Ekza avatar catalogue to a game instead of a
