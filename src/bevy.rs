@@ -240,7 +240,11 @@ pub fn load_roster_catalog(asset_server: &AssetServer, asset_root: &Path) -> Ekz
     load_roster(asset_server, asset_root, &roster)
 }
 
-pub fn load_roster(asset_server: &AssetServer, asset_root: &Path, roster: &Roster) -> EkzaRosterCatalog {
+pub fn load_roster(
+    asset_server: &AssetServer,
+    asset_root: &Path,
+    roster: &Roster,
+) -> EkzaRosterCatalog {
     let mut catalog = EkzaRosterCatalog::default();
     for entry in &roster.avatars {
         let relative = entry
@@ -249,9 +253,12 @@ pub fn load_roster(asset_server: &AssetServer, asset_root: &Path, roster: &Roste
             .unwrap_or_else(|| format!("avatars/{}.glb", entry.slug));
         let path = asset_root.join(&relative);
         let handles = match validate_glb_file(&path, &GlbValidationRules::default()) {
-            Ok(report) if report.is_valid() => {
-                glb_handles(asset_server, &relative, "Scene0", entry.display_name.clone())
-            }
+            Ok(report) if report.is_valid() => glb_handles(
+                asset_server,
+                &relative,
+                "Scene0",
+                entry.display_name.clone(),
+            ),
             Ok(report) => {
                 warn!(
                     "Ekza roster model {path:?} failed validation: {:?}",

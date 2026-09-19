@@ -121,8 +121,9 @@ impl PassportClient {
     }
 
     pub fn from_env(project_id: &str) -> Result<Self, String> {
-        let base = std::env::var(PASSPORT_URL_ENV)
-            .map_err(|_| format!("Set {PASSPORT_URL_ENV} to the trusted storefront passport API"))?;
+        let base = std::env::var(PASSPORT_URL_ENV).map_err(|_| {
+            format!("Set {PASSPORT_URL_ENV} to the trusted storefront passport API")
+        })?;
         Self::new(&base, project_id)
     }
 
@@ -294,7 +295,11 @@ impl NativeSession {
                 return Err("Invalid owned NFT mint".into());
             }
         }
-        Ok(Self { api, token, library })
+        Ok(Self {
+            api,
+            token,
+            library,
+        })
     }
 
     pub fn wallet(&self) -> &str {

@@ -172,7 +172,11 @@ pub fn open_in_browser(url: &str) -> Result<(), String> {
         let mut command = std::process::Command::new("rundll32");
         command.args(["url.dll,FileProtocolHandler", &url]);
         command
-    } else if cfg!(all(unix, not(target_os = "ios"), not(target_os = "android"))) {
+    } else if cfg!(all(
+        unix,
+        not(target_os = "ios"),
+        not(target_os = "android")
+    )) {
         let mut command = std::process::Command::new("xdg-open");
         command.arg(&url);
         command
@@ -268,7 +272,9 @@ mod tests {
         assert!(!format!("{awaiting:?}").contains(device_code));
         assert!(flow.in_progress());
 
-        let done = wait_for(&flow, |state| !matches!(state, PairingState::AwaitingApproval { .. }));
+        let done = wait_for(&flow, |state| {
+            !matches!(state, PairingState::AwaitingApproval { .. })
+        });
         assert_eq!(done, PairingState::Connected);
         assert!(!flow.in_progress());
         let session = flow.take_session().expect("session is handed over once");
@@ -283,8 +289,8 @@ mod tests {
         let probe = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = probe.local_addr().unwrap().port();
         drop(probe);
-        let api =
-            PassportClient::new(&format!("http://127.0.0.1:{port}/api/passport"), "my-game").unwrap();
+        let api = PassportClient::new(&format!("http://127.0.0.1:{port}/api/passport"), "my-game")
+            .unwrap();
         let flow = PairingFlow::start_with(api, Some(Duration::from_millis(20)));
         let failed = wait_for(&flow, |state| matches!(state, PairingState::Failed(_)));
         assert_eq!(

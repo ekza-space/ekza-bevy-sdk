@@ -72,11 +72,30 @@ pub fn valid_base58_key(value: &str) -> bool {
         && value.bytes().all(|byte| matches!(byte, b'1'..=b'9' | b'A'..=b'H' | b'J'..=b'N' | b'P'..=b'Z' | b'a'..=b'k' | b'm'..=b'z'))
 }
 
+/// A canonical avatar identity. Two schemes exist: an on-chain template
+/// (`solana:devnet:avatar-data:<base58 PDA>`) and an avatar published through Ekza
+/// Studio (`ekza:avatar:<uuid>`), which has no chain record at all.
 pub fn validate_avatar_id(id: &str) -> Result<(), &'static str> {
-    match id.strip_prefix("solana:devnet:avatar-data:") {
-        Some(key) if valid_base58_key(key) => Ok(()),
-        _ => Err("Invalid canonical devnet avatar identity"),
+    if let Some(key) = id.strip_prefix("solana:devnet:avatar-data:") {
+        return if valid_base58_key(key) {
+            Ok(())
+        } else {
+            Err("Invalid canonical devnet avatar identity")
+        };
     }
+    match id.strip_prefix("ekza:avatar:") {
+        Some(uuid) if valid_uuid(uuid) => Ok(()),
+        _ => Err("Invalid canonical avatar identity"),
+    }
+}
+
+/// Lowercase canonical UUID text (8-4-4-4-12), as PostgreSQL prints it.
+pub fn valid_uuid(value: &str) -> bool {
+    value.len() == 36
+        && value.bytes().enumerate().all(|(index, byte)| match index {
+            8 | 13 | 18 | 23 => byte == b'-',
+            _ => byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte),
+        })
 }
 
 /// Which approval a consumer is willing to accept: its own project id plus the
@@ -122,7 +141,11 @@ pub fn validate_project_support(
     {
         return Err("Unsupported rendition compatibility profile");
     }
-    if !selector.formats.iter().any(|format| format == &rendition.format) {
+    if !selector
+        .formats
+        .iter()
+        .any(|format| format == &rendition.format)
+    {
         return Err("Rendition format is not accepted by this project");
     }
     if !(20..=MAX_RENDITION_BYTES).contains(&rendition.size_bytes)
@@ -245,6 +268,29 @@ pub mod pairing;
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn both_identity_schemes_are_accepted_and_nothing_else() {
+        assert!(
+            super::validate_avatar_id(&format!("solana:devnet:avatar-data:{}", "1".repeat(32)))
+                .is_ok()
+        );
+        assert!(
+            super::validate_avatar_id("ekza:avatar:2f0c1f0e-7b1a-4c55-9d53-0a6d3c1b9e77").is_ok()
+        );
+        for bad in [
+            "ekza:avatar:2F0C1F0E-7B1A-4C55-9D53-0A6D3C1B9E77",
+            "ekza:avatar:2f0c1f0e7b1a4c559d530a6d3c1b9e77",
+            "ekza:avatar:2f0c1f0e-7b1a-4c55-9d53-0a6d3c1b9e7",
+            "ekza:avatar:../../etc/passwd-0000-0000-000000000",
+            "ekza:avatar:",
+            "ekza:space:2f0c1f0e-7b1a-4c55-9d53-0a6d3c1b9e77",
+            "solana:mainnet:avatar-data:11111111111111111111111111111111",
+            "",
+        ] {
+            assert!(super::validate_avatar_id(bad).is_err(), "{bad:?}");
+        }
+    }
+
     use super::*;
 
     fn protected() -> ProtectedAvatar {
@@ -280,7 +326,11 @@ mod tests {
     #[test]
     fn generic_selector_matches_any_project() {
         let mut asset = protected();
-        assert!(asset.validate_for(&SupportSelector::omoba_desktop()).is_ok());
+        assert!(
+            asset
+                .validate_for(&SupportSelector::omoba_desktop())
+                .is_ok()
+        );
         let space = SupportSelector::new("ekza-space", "universal", "vrm-humanoid-v0", &["vrm0"]);
         assert!(asset.validate_for(&space).is_err());
         asset.support.project_id = "ekza-space".into();

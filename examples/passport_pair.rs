@@ -47,7 +47,10 @@ fn run() -> Result<(), String> {
     let mut open = true;
     let mut argv = env::args().skip(1);
     while let Some(flag) = argv.next() {
-        let mut value = || argv.next().ok_or_else(|| format!("{flag} requires a value"));
+        let mut value = || {
+            argv.next()
+                .ok_or_else(|| format!("{flag} requires a value"))
+        };
         match flag.as_str() {
             "--passport" => passport = value()?,
             "--registry" => registry = value()?,
@@ -95,7 +98,10 @@ fn run() -> Result<(), String> {
 
     println!("Wallet {} connected.", session.wallet());
     let owned = session.supported(&selector);
-    println!("{} owned avatar(s) approved for {project}/{platform}/{profile}:", owned.len());
+    println!(
+        "{} owned avatar(s) approved for {project}/{platform}/{profile}:",
+        owned.len()
+    );
     for protected in &owned {
         println!("  {}  {}", protected_slug(protected), protected.avatar_id);
     }

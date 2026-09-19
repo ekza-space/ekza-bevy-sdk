@@ -1,6 +1,6 @@
 [package]
 name = "ekza-bevy-sdk"
-version = "0.4.1"
+version = "0.5.0"
 edition = "2024"
 description = "Ekza avatar SDK: catalogue, verified asset cache, passport client and Bevy integration for loading Ekza avatars into 2D/3D games"
 repository = "https://github.com/ekza-space/ekza-bevy-sdk"

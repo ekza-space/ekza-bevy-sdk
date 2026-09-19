@@ -21,10 +21,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    catalog::{AvatarOrigin, EkzaAvatar},
-    passport::{
-        ProjectSupport, ProtectedAvatar, Rendition, SupportSelector, protected_slug,
-    },
+    catalog::{AvatarOrigin, CatalogV2Avatar, EkzaAvatar},
+    passport::{ProjectSupport, ProtectedAvatar, Rendition, SupportSelector, protected_slug},
 };
 
 pub const STORE_SCHEMA: &str = "ekza.store.v1";
@@ -43,6 +41,10 @@ pub struct StoreAvatar {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub thumbnail_url: Option<String>,
     pub protected: ProtectedAvatar,
+    /// The registry marked this avatar `"free"`: the boundary still pins the exact
+    /// rendition, but wearing it needs no ownership proof. Absent means owned.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub free: bool,
 }
 
 #[cfg(feature = "http")]
@@ -105,11 +107,29 @@ pub fn templates(avatars: &[EkzaAvatar], selector: &SupportSelector) -> Vec<Stor
                     license: avatar.license.clone(),
                     thumbnail_url: avatar.thumbnail_url.clone(),
                     protected,
+                    free: false,
                 });
             }
         }
     }
     items
+}
+
+/// [`templates`] for the unified `/v2/avatars` feed. An item is `free` only when
+/// the registry said so explicitly; on-chain templates stay owned.
+pub fn templates_v2(items: &[CatalogV2Avatar], selector: &SupportSelector) -> Vec<StoreAvatar> {
+    let mut seen = std::collections::HashSet::new();
+    let mut result = Vec::new();
+    for item in items {
+        let free = item.is_free();
+        for mut template in templates(&[item.clone().into_avatar()], selector) {
+            template.free = free;
+            if seen.insert(template.slug.clone()) {
+                result.push(template);
+            }
+        }
+    }
+    result
 }
 
 /// Re-validate a persisted or remote item: the slug must be the one derived
@@ -133,7 +153,7 @@ mod runtime {
         path::{Path, PathBuf},
     };
 
-    use super::{STORE_SCHEMA, StoreAvatar, StoreDocument, templates, validate_item};
+    use super::{STORE_SCHEMA, StoreAvatar, StoreDocument, templates, templates_v2, validate_item};
     use crate::{
         cache::{AssetCache, atomic_write},
         catalog::AvatarRendition,
@@ -161,7 +181,8 @@ mod runtime {
             let root = root.into();
             Ok(Self {
                 registry: RegistryClient::new(registry_url).map_err(|error| error.to_string())?,
-                cache: AssetCache::new(root.join(".ekza-cache")).map_err(|error| error.to_string())?,
+                cache: AssetCache::new(root.join(".ekza-cache"))
+                    .map_err(|error| error.to_string())?,
                 selector,
                 root,
             })
@@ -186,11 +207,21 @@ mod runtime {
 
         /// Fetch the approved catalogue and persist it for offline starts.
         pub fn refresh(&self) -> Result<Vec<StoreAvatar>, String> {
-            let avatars = self
-                .registry
-                .catalog(None)
-                .map_err(|error| error.to_string())?;
-            let items = templates(&avatars, &self.selector);
+            // The unified feed carries Studio avatars too. A registry that predates
+            // it answers with an error; fall back to the template catalogue.
+            let items = match self.registry.catalog_v2(
+                Some(&self.selector.project_id),
+                Some((&self.selector.platform, &self.selector.profile)),
+            ) {
+                Ok(unified) => templates_v2(&unified, &self.selector),
+                Err(_) => {
+                    let avatars = self
+                        .registry
+                        .catalog(None)
+                        .map_err(|error| error.to_string())?;
+                    templates(&avatars, &self.selector)
+                }
+            };
             let document = StoreDocument {
                 schema: STORE_SCHEMA.into(),
                 avatars: items.clone(),
@@ -342,6 +373,91 @@ mod tests {
         }
     }
 
+    /// The exact document shape `GET /v2/avatars` returns.
+    fn unified(access: &str, id: &str, project: &str) -> crate::catalog::CatalogV2Avatar {
+        serde_json::from_value(serde_json::json!({
+            "id": id, "name": "Robert", "description": "", "access": access,
+            "thumbnailUrl": "https://registry.ekza.io/v1/studio/assets/t/thumbnail",
+            "license": {"text": "CC0", "attribution": "opensourceavatars"},
+            "creator": {"name": "alice"},
+            "origin": {"kind": "studio", "revisionId": "r"},
+            "renditions": [{
+                "platform": "desktop", "profile": "humanoid-glb-v1", "profileVersion": 1,
+                "format": "glb", "mediaType": "model/gltf-binary",
+                "sha256": "d".repeat(64), "sizeBytes": 1885072,
+                "downloadUrl": format!("https://registry.ekza.io/v1/studio/assets/{}/rendition", "d".repeat(64))
+            }],
+            "projectSupport": [{"projectId": project, "platform": "desktop",
+                "profile": "humanoid-glb-v1", "status": "approved"}]
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn unified_feed_marks_only_explicitly_free_avatars() {
+        let studio = "ekza:avatar:2f0c1f0e-7b1a-4c55-9d53-0a6d3c1b9e77";
+        let chain = format!("solana:devnet:avatar-data:{}", "1".repeat(32));
+        let items = [
+            unified("free", studio, "omoba"),
+            unified("owned", &chain, "omoba"),
+        ];
+        let listed = templates_v2(&items, &SupportSelector::omoba_desktop());
+        assert_eq!(listed.len(), 2);
+        assert!(listed[0].free && !listed[1].free);
+        assert_eq!(listed[0].protected.avatar_id, studio);
+        assert_eq!(listed[0].author.as_deref(), Some("alice"));
+        assert_eq!(listed[0].protected.support.rendition.size_bytes, 1885072);
+        for item in &listed {
+            assert_eq!(item.slug, protected_slug(&item.protected));
+            assert!(validate_item(item, &SupportSelector::omoba_desktop()).is_ok());
+        }
+        // Same bytes, different identity: never the same slug.
+        assert_ne!(listed[0].slug, listed[1].slug);
+        // A missing or unknown access value is never treated as free.
+        for access in ["", "FREE", "gratis"] {
+            let listed = templates_v2(
+                &[unified(access, studio, "omoba")],
+                &SupportSelector::omoba_desktop(),
+            );
+            assert!(!listed[0].free, "{access:?}");
+        }
+        // Approved for another game: nothing for Omoba.
+        assert!(
+            templates_v2(
+                &[unified("free", studio, "ekza-space")],
+                &SupportSelector::omoba_desktop()
+            )
+            .is_empty()
+        );
+        // A malformed Studio identity is dropped, not trusted.
+        assert!(
+            templates_v2(
+                &[unified("free", "ekza:avatar:not-a-uuid", "omoba")],
+                &SupportSelector::omoba_desktop()
+            )
+            .is_empty()
+        );
+    }
+
+    #[test]
+    fn free_flag_survives_persistence_and_defaults_to_owned() {
+        let item = templates_v2(
+            &[unified(
+                "free",
+                "ekza:avatar:2f0c1f0e-7b1a-4c55-9d53-0a6d3c1b9e77",
+                "omoba",
+            )],
+            &SupportSelector::omoba_desktop(),
+        )
+        .remove(0);
+        let text = serde_json::to_string(&item).unwrap();
+        assert!(text.contains("\"free\":true"));
+        assert_eq!(serde_json::from_str::<StoreAvatar>(&text).unwrap(), item);
+        // A document written by an older SDK has no such key.
+        let legacy = text.replace(",\"free\":true", "");
+        assert!(!serde_json::from_str::<StoreAvatar>(&legacy).unwrap().free);
+    }
+
     #[test]
     fn only_templates_approved_for_the_exact_selector_are_listed() {
         let approved = template("Robert", '1', 'a');
@@ -355,7 +471,14 @@ mod tests {
         library.origin = AvatarOrigin::Library;
 
         let items = templates(
-            &[approved.clone(), other_project, pending, unhashed, library, approved],
+            &[
+                approved.clone(),
+                other_project,
+                pending,
+                unhashed,
+                library,
+                approved,
+            ],
             &SupportSelector::omoba_desktop(),
         );
         assert_eq!(items.len(), 1);
@@ -412,7 +535,9 @@ mod tests {
         std::fs::write(cache.join(format!("{}.glb", sha256_hex(&bytes))), &bytes).unwrap();
 
         assert_eq!(
-            store.install(&item, |_| Err("no clips".into())).unwrap_err(),
+            store
+                .install(&item, |_| Err("no clips".into()))
+                .unwrap_err(),
             "no clips"
         );
         assert!(!store.model_path(&item.slug).exists());

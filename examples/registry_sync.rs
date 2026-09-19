@@ -73,7 +73,8 @@ fn parse() -> Result<Args, String> {
     let mut verbose = false;
 
     let value = |flag: &str, argv: &mut dyn Iterator<Item = String>| {
-        argv.next().ok_or_else(|| format!("{flag} requires a value"))
+        argv.next()
+            .ok_or_else(|| format!("{flag} requires a value"))
     };
     while let Some(arg) = argv.next() {
         match arg.as_str() {
@@ -90,9 +91,7 @@ fn parse() -> Result<Args, String> {
                         .map_err(|_| "--library-max expects a number".to_string())?,
                 )
             }
-            "--offline-catalog" => {
-                offline_catalog = Some(PathBuf::from(value(&arg, &mut argv)?))
-            }
+            "--offline-catalog" => offline_catalog = Some(PathBuf::from(value(&arg, &mut argv)?)),
             "--project" => project = Some(value(&arg, &mut argv)?),
             "--platform" => platform = value(&arg, &mut argv)?,
             "--profile" => profile = value(&arg, &mut argv)?,
@@ -154,17 +153,23 @@ fn main() -> ExitCode {
     let mut feeds: Vec<Vec<EkzaAvatar>> = Vec::new();
 
     if let Some(path) = &args.offline_catalog {
-        match std::fs::read_to_string(path).map_err(|e| e.to_string()).and_then(|raw| {
-            serde_json::from_str::<ekza_bevy_sdk::catalog::RegistryCatalogDocument>(&raw)
-                .map_err(|e| e.to_string())
-        }) {
+        match std::fs::read_to_string(path)
+            .map_err(|e| e.to_string())
+            .and_then(|raw| {
+                serde_json::from_str::<ekza_bevy_sdk::catalog::RegistryCatalogDocument>(&raw)
+                    .map_err(|e| e.to_string())
+            }) {
             Ok(document) => {
                 let avatars: Vec<EkzaAvatar> = document
                     .items
                     .into_iter()
                     .map(|avatar| avatar.into_avatar(&args.registry))
                     .collect();
-                eprintln!("offline catalogue {}: {} avatars", path.display(), avatars.len());
+                eprintln!(
+                    "offline catalogue {}: {} avatars",
+                    path.display(),
+                    avatars.len()
+                );
                 feeds.push(avatars);
             }
             Err(error) => {
@@ -182,7 +187,11 @@ fn main() -> ExitCode {
         };
         match client.catalog(None) {
             Ok(avatars) => {
-                eprintln!("registry {}/v1/avatars: {} avatars", client.base_url(), avatars.len());
+                eprintln!(
+                    "registry {}/v1/avatars: {} avatars",
+                    client.base_url(),
+                    avatars.len()
+                );
                 feeds.push(avatars);
             }
             Err(error) => eprintln!("registry catalogue unavailable: {error}"),

@@ -9,8 +9,8 @@ use reqwest::{Url, blocking::Client, redirect::Policy};
 use serde::de::DeserializeOwned;
 
 use crate::catalog::{
-    EkzaAvatar, LibraryPage, PassportCatalog, RegistryCatalogResponse, RegistryResolution,
-    merge_avatars,
+    CatalogV2Avatar, CatalogV2Response, EkzaAvatar, LibraryPage, PassportCatalog,
+    RegistryCatalogResponse, RegistryResolution, merge_avatars,
 };
 
 pub const DEFAULT_REGISTRY_URL: &str = "https://registry.ekza.io";
@@ -37,7 +37,10 @@ impl std::fmt::Display for RegistryError {
                 write!(f, "Ekza feed {url} exceeded the {limit} byte JSON limit")
             }
             Self::Decode { url, detail } => {
-                write!(f, "Ekza feed {url} returned an unexpected document: {detail}")
+                write!(
+                    f,
+                    "Ekza feed {url} returned an unexpected document: {detail}"
+                )
             }
         }
     }
@@ -208,6 +211,27 @@ impl RegistryClient {
             .collect())
     }
 
+    /// The unified catalogue: on-chain templates and Ekza Studio avatars. With
+    /// `project`, only avatars that project approved for the selected rendition
+    /// are returned. A registry that predates `/v2/avatars` answers 404.
+    pub fn catalog_v2(
+        &self,
+        project: Option<&str>,
+        selector: Option<(&str, &str)>,
+    ) -> Result<Vec<CatalogV2Avatar>, RegistryError> {
+        let mut query: Vec<(&str, String)> = Vec::new();
+        if let Some(project) = project {
+            query.push(("project", project.to_string()));
+        }
+        if let Some((platform, profile)) = selector {
+            query.push(("platform", platform.to_string()));
+            query.push(("profile", profile.to_string()));
+        }
+        let url = self.endpoint("v2/avatars", &query)?;
+        let response: CatalogV2Response = get_json(&self.client, url)?;
+        Ok(response.items)
+    }
+
     /// Exact rendition resolution for one avatar.
     pub fn resolve(
         &self,
@@ -260,8 +284,11 @@ impl PassportCatalogClient {
     }
 
     pub fn catalog(&self) -> Result<Vec<EkzaAvatar>, RegistryError> {
-        let url = Url::parse(&format!("{}/catalog", self.base.as_str().trim_end_matches('/')))
-            .map_err(|_| RegistryError::InvalidUrl(self.base.to_string()))?;
+        let url = Url::parse(&format!(
+            "{}/catalog",
+            self.base.as_str().trim_end_matches('/')
+        ))
+        .map_err(|_| RegistryError::InvalidUrl(self.base.to_string()))?;
         let catalog: PassportCatalog = get_json(&self.client, url)?;
         Ok(catalog.items.into_iter().map(EkzaAvatar::from).collect())
     }

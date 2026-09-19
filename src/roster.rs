@@ -82,7 +82,8 @@ pub struct Roster {
 impl Roster {
     pub fn read(path: &Path) -> io::Result<Self> {
         let raw = fs::read_to_string(path)?;
-        serde_json::from_str(&raw).map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
+        serde_json::from_str(&raw)
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
     }
 
     pub fn read_or_default(path: &Path) -> io::Result<Self> {
@@ -114,7 +115,11 @@ impl Roster {
     /// `ekza_id`) are never overwritten by synced ones, so a hand-tuned roster
     /// model keeps precedence over a catalogue copy with the same slug.
     pub fn upsert(&mut self, entry: RosterEntry) -> bool {
-        match self.avatars.iter_mut().find(|existing| existing.slug == entry.slug) {
+        match self
+            .avatars
+            .iter_mut()
+            .find(|existing| existing.slug == entry.slug)
+        {
             Some(existing) if existing.ekza_id.is_none() && entry.ekza_id.is_some() => false,
             Some(existing) => {
                 *existing = entry;
@@ -204,7 +209,10 @@ pub mod sync {
     };
 
     /// Build the passport boundary for an approved template rendition.
-    pub fn protected_avatar(avatar: &EkzaAvatar, project_id: &str) -> Result<ProtectedAvatar, &'static str> {
+    pub fn protected_avatar(
+        avatar: &EkzaAvatar,
+        project_id: &str,
+    ) -> Result<ProtectedAvatar, &'static str> {
         validate_avatar_id(&avatar.id)?;
         let approval = avatar
             .project_support
@@ -342,7 +350,9 @@ pub mod sync {
                     synced_slugs.push(slug.clone());
                     report.staged.push(slug);
                 }
-                SyncOutcome::Skipped { reason } => report.skipped.push((avatar.name.clone(), reason)),
+                SyncOutcome::Skipped { reason } => {
+                    report.skipped.push((avatar.name.clone(), reason))
+                }
                 SyncOutcome::Failed { detail } => report.failed.push((avatar.name.clone(), detail)),
             }
         }
@@ -365,8 +375,8 @@ pub mod sync {
         roster: &mut Roster,
     ) -> SyncOutcome {
         let project = options.project_id.as_deref();
-        let is_protected = avatar.origin != AvatarOrigin::Library
-            && avatar.origin != AvatarOrigin::Local;
+        let is_protected =
+            avatar.origin != AvatarOrigin::Library && avatar.origin != AvatarOrigin::Local;
         let approved = project.is_some_and(|project| avatar.is_approved_for(project));
         if options.approved_only && !approved {
             return SyncOutcome::Skipped {
@@ -385,7 +395,8 @@ pub mod sync {
                 ProtectedPolicy::Passport => {
                     let Some(project) = project else {
                         return SyncOutcome::Skipped {
-                            reason: "protected template needs --project to select an approval".into(),
+                            reason: "protected template needs --project to select an approval"
+                                .into(),
                         };
                     };
                     if !approved {
@@ -395,7 +406,11 @@ pub mod sync {
                     }
                     match protected_avatar(avatar, project) {
                         Ok(protected) => passport = Some(protected),
-                        Err(reason) => return SyncOutcome::Skipped { reason: reason.into() },
+                        Err(reason) => {
+                            return SyncOutcome::Skipped {
+                                reason: reason.into(),
+                            };
+                        }
                     }
                 }
             }
@@ -419,7 +434,10 @@ pub mod sync {
             .as_ref()
             .map_or_else(|| avatar.slug(), crate::passport::protected_slug);
         if options.dry_run {
-            return SyncOutcome::Staged { slug, reused: false };
+            return SyncOutcome::Staged {
+                slug,
+                reused: false,
+            };
         }
         let cached = match cache.fetch_model(rendition) {
             Ok(cached) => cached,
@@ -523,12 +541,24 @@ mod tests {
         let avatar = avatar();
         let entry = RosterEntry::from_avatar(&avatar, &avatar.renditions[0], "546d", 10, None);
         let json = serde_json::to_value(&entry).unwrap();
-        for required in ["slug", "display_name", "collection", "license", "source_url"] {
+        for required in [
+            "slug",
+            "display_name",
+            "collection",
+            "license",
+            "source_url",
+        ] {
             assert!(json[required].is_string(), "{required} must be a string");
         }
-        assert!(json.get("passport").is_none(), "no passport unless imported");
+        assert!(
+            json.get("passport").is_none(),
+            "no passport unless imported"
+        );
         assert_eq!(json["approved_projects"], serde_json::json!(["omoba"]));
-        assert_eq!(entry.model.as_deref(), Some(format!("avatars/{}.glb", entry.slug).as_str()));
+        assert_eq!(
+            entry.model.as_deref(),
+            Some(format!("avatars/{}.glb", entry.slug).as_str())
+        );
 
         // An Omoba-shaped manifest (no extension fields) round-trips.
         let omoba_manifest = r#"{"avatars":[{"author":"Polygonal-Mind","collection":"100Avatars R3","display_name":"Agnes","license":"CC0","slug":"agnes","source_url":"https://arweave.net/x","thumbnail":"agnes.jpg"}]}"#;

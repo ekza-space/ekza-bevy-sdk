@@ -504,6 +504,114 @@ pub struct PassportCatalog {
     pub items: Vec<PassportCatalogItem>,
 }
 
+/// One rendition of a [`CatalogV2Avatar`]; the URL is always absolute.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CatalogV2Rendition {
+    pub platform: String,
+    pub profile: String,
+    pub format: String,
+    #[serde(default)]
+    pub media_type: Option<String>,
+    pub sha256: String,
+    pub size_bytes: u64,
+    pub download_url: String,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CatalogV2License {
+    #[serde(default)]
+    pub text: String,
+    #[serde(default)]
+    pub attribution: String,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CatalogV2Creator {
+    #[serde(default)]
+    pub name: String,
+}
+
+/// An avatar from `GET {registry}/v2/avatars`: on-chain templates and avatars
+/// published through Ekza Studio in one shape. `access` is `"free"` when a game
+/// may admit the avatar with no ownership proof, `"owned"` when wearing it needs a
+/// passport ticket. Anything else is treated as owned.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CatalogV2Avatar {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub thumbnail_url: Option<String>,
+    #[serde(default)]
+    pub license: Option<CatalogV2License>,
+    #[serde(default)]
+    pub creator: Option<CatalogV2Creator>,
+    #[serde(default)]
+    pub access: String,
+    #[serde(default)]
+    pub renditions: Vec<CatalogV2Rendition>,
+    #[serde(default)]
+    pub project_support: Vec<ProjectApproval>,
+}
+
+/// `GET /v2/avatars` response.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CatalogV2Response {
+    #[serde(default)]
+    pub schema: String,
+    #[serde(default)]
+    pub count: usize,
+    #[serde(default)]
+    pub items: Vec<CatalogV2Avatar>,
+}
+
+impl CatalogV2Avatar {
+    /// Only an explicit `"free"` counts; a missing or unknown value never does.
+    pub fn is_free(&self) -> bool {
+        self.access == "free"
+    }
+
+    pub fn into_avatar(self) -> EkzaAvatar {
+        EkzaAvatar {
+            origin: AvatarOrigin::Registry,
+            id: self.id,
+            name: self.name,
+            collection: Some("Ekza".into()),
+            author: self
+                .creator
+                .map(|creator| creator.name)
+                .filter(|name| !name.is_empty()),
+            license: self
+                .license
+                .map(|license| license.text)
+                .filter(|text| !text.is_empty()),
+            description: self.description.filter(|text| !text.is_empty()),
+            thumbnail_url: self.thumbnail_url,
+            source_url: None,
+            tags: Vec::new(),
+            renditions: self
+                .renditions
+                .into_iter()
+                .map(|rendition| AvatarRendition {
+                    id: format!("sha256:{}", rendition.sha256),
+                    format: rendition.format,
+                    platform: rendition.platform,
+                    profile: rendition.profile,
+                    url: rendition.download_url,
+                    sha256: Some(rendition.sha256),
+                    size_bytes: Some(rendition.size_bytes),
+                    media_type: rendition.media_type,
+                })
+                .collect(),
+            project_support: self.project_support,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PassportCatalogItem {
@@ -703,7 +811,9 @@ mod tests {
         assert_eq!(witch.origin, AvatarOrigin::Library);
         assert_eq!(witch.name, "Witch");
         assert_eq!(witch.collection.as_deref(), Some("100Avatars R1"));
-        let model = witch.gltf_rendition(None, "universal", "vrm-humanoid-v0").unwrap();
+        let model = witch
+            .gltf_rendition(None, "universal", "vrm-humanoid-v0")
+            .unwrap();
         assert_eq!(model.format, "vrm");
         assert_eq!(model.file_extension(), "vrm");
         assert!(model.url.contains(&model.id));

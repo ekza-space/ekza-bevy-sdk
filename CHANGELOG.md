@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.5.0 — 2026-09-19
+
+### Added
+
+- The unified catalogue `GET {registry}/v2/avatars`: `RegistryClient::catalog_v2`,
+  `catalog::CatalogV2Avatar` and `store::templates_v2`. It carries on-chain templates
+  and avatars published through Ekza Studio in one shape, already narrowed to what a
+  project approved. `AvatarStore::refresh` prefers it and falls back to `/v1/avatars`
+  for a registry that does not serve it yet.
+- `StoreAvatar::free`: true only when the registry marked the avatar `"free"`. The
+  boundary still pins the exact rendition (the slug is a hash of identity and
+  rendition), but a game may admit it with no ownership proof. A missing or unknown
+  access value is treated as owned. Persisted store documents from 0.4 load as owned.
+
+### Changed
+
+- `passport::validate_avatar_id` accepts a second identity scheme,
+  `ekza:avatar:<uuid>`, next to `solana:devnet:avatar-data:<PDA>`. Studio avatars
+  have no chain record. `passport::valid_uuid` is public.
+
 ## 0.4.1 — 2026-09-18
 
 ### Added

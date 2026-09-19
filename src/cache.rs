@@ -48,7 +48,10 @@ impl std::fmt::Display for CacheError {
                 write!(f, "download size {actual} differs from declared {expected}")
             }
             Self::HashMismatch { expected, actual } => {
-                write!(f, "download SHA-256 {actual} differs from declared {expected}")
+                write!(
+                    f,
+                    "download SHA-256 {actual} differs from declared {expected}"
+                )
             }
             Self::TooLarge { limit } => write!(f, "download exceeded the {limit} byte limit"),
             Self::InvalidModel(detail) => write!(f, "downloaded model is invalid: {detail}"),
@@ -206,8 +209,7 @@ impl AssetCache {
         if rendition.is_gltf_binary() {
             let report = validate_glb_bytes(bytes, &GlbValidationRules::default());
             if !report.is_valid() {
-                let issues: Vec<String> =
-                    report.issues().iter().map(ToString::to_string).collect();
+                let issues: Vec<String> = report.issues().iter().map(ToString::to_string).collect();
                 return Err(CacheError::InvalidModel(issues.join("; ")));
             }
         }
@@ -259,7 +261,10 @@ impl AssetCache {
         let path = self.model_path(&sha256, extension);
         atomic_write(&path, &bytes)?;
         if rendition.sha256.is_none() {
-            atomic_write(&self.url_index_path(&rendition.url, extension), sha256.as_bytes())?;
+            atomic_write(
+                &self.url_index_path(&rendition.url, extension),
+                sha256.as_bytes(),
+            )?;
         }
         Ok(CachedFile {
             path,
@@ -277,10 +282,10 @@ impl AssetCache {
 
     /// Download a thumbnail, sniffing the real image type for the extension.
     pub fn fetch_thumbnail(&self, url: &str) -> Result<(CachedFile, ImageKind), CacheError> {
-        let index = self.root.join("by-url").join(format!(
-            "{}.thumb.sha256",
-            sha256_hex(url.as_bytes())
-        ));
+        let index = self
+            .root
+            .join("by-url")
+            .join(format!("{}.thumb.sha256", sha256_hex(url.as_bytes())));
         if let Ok(entry) = fs::read_to_string(&index) {
             let entry = entry.trim();
             if let Some((sha256, extension)) = entry.split_once(' ') {
@@ -350,7 +355,10 @@ mod tests {
     fn verify_model_enforces_size_hash_and_envelope() {
         let bytes = glb(8);
         let good = rendition(&bytes, true);
-        assert_eq!(AssetCache::verify_model(&good, &bytes).unwrap(), sha256_hex(&bytes));
+        assert_eq!(
+            AssetCache::verify_model(&good, &bytes).unwrap(),
+            sha256_hex(&bytes)
+        );
 
         let mut wrong_size = good.clone();
         wrong_size.size_bytes = Some(1);
@@ -397,7 +405,10 @@ mod tests {
     #[test]
     fn image_sniffing_uses_real_container() {
         assert_eq!(sniff_image(b"\x89PNG\r\n\x1a\n...."), Some(ImageKind::Png));
-        assert_eq!(sniff_image(&[0xFF, 0xD8, 0xFF, 0xE0]), Some(ImageKind::Jpeg));
+        assert_eq!(
+            sniff_image(&[0xFF, 0xD8, 0xFF, 0xE0]),
+            Some(ImageKind::Jpeg)
+        );
         assert_eq!(sniff_image(b"RIFF\0\0\0\0WEBPVP8 "), Some(ImageKind::WebP));
         assert_eq!(sniff_image(b"glTF"), None);
     }
