@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.6.0 — 2026-09-20
+
+### Added
+
+- `account`: connect a game to an Ekza account with no wallet. `AccountClient` starts
+  a device flow at `{registry}/v1/account/device`, `AccountFlow` runs it on a worker
+  thread and reuses the renderable `passport::pairing::PairingState`, and
+  `AccountSession` reads `{registry}/v1/account/library`: the avatars that account
+  saved or created and that are approved for this game, as `StoreAvatar`s validated
+  exactly like the public store. `AccountSession::refresh` re-reads it after the
+  player saved something in the browser. The device code and the token stay in
+  memory and have no `Debug`. The token is not an entitlement; admission stays the
+  game server's decision.
+- `examples/account_pair`: engine-free CLI that connects an account and lists the
+  library for a project and rendition selector.
+
 ## 0.5.0 — 2026-09-19
 
 ### Added

@@ -31,6 +31,8 @@ pub mod store;
 pub mod validation;
 
 #[cfg(feature = "http")]
+pub mod account;
+#[cfg(feature = "http")]
 pub mod cache;
 #[cfg(feature = "http")]
 pub mod registry;
