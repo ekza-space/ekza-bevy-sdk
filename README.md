@@ -108,6 +108,11 @@ let items = store.refresh()?;          // templates an operator approved for my-
 let path = store.install(&items[0], |bytes| my_rig_check(bytes))?; // verified, then placed
 ```
 
+A failed refresh leaves the persisted catalogue unchanged. Only a missing v2
+endpoint (HTTP 404) triggers v1 compatibility; outages and incomplete catalogues
+are errors. Callers can continue showing `store.cached()` until recovery. Server
+admission remains authoritative.
+
 Every item is named by `passport::protected_slug` (`ekza-<sha256>` over the
 avatar identity and the exact rendition hash). That one name goes on the wire:
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — 2026-09-21
+
+- Keep the last complete catalogue on v2 outages, malformed responses, and older
+  servers' partial `200 + X-Studio-Status` responses. Fall back to v1 only on v2 404.
+- Add loopback HTTP regressions for outages, recovery and legacy compatibility.
+
 ## 0.6.0 — 2026-09-20
 
 ### Added

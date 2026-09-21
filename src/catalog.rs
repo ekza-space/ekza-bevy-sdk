@@ -561,11 +561,8 @@ pub struct CatalogV2Avatar {
 /// `GET /v2/avatars` response.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CatalogV2Response {
-    #[serde(default)]
     pub schema: String,
-    #[serde(default)]
     pub count: usize,
-    #[serde(default)]
     pub items: Vec<CatalogV2Avatar>,
 }
 

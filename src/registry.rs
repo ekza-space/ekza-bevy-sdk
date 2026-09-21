@@ -25,6 +25,7 @@ pub enum RegistryError {
     Status { status: u16, url: String },
     TooLarge { url: String, limit: u64 },
     Decode { url: String, detail: String },
+    Incomplete { url: String },
 }
 
 impl std::fmt::Display for RegistryError {
@@ -33,6 +34,7 @@ impl std::fmt::Display for RegistryError {
             Self::InvalidUrl(url) => write!(f, "invalid Ekza feed URL: {url}"),
             Self::Transport(detail) => write!(f, "Ekza feed request failed: {detail}"),
             Self::Status { status, url } => write!(f, "Ekza feed {url} answered HTTP {status}"),
+            Self::Incomplete { url } => write!(f, "Ekza feed {url} is temporarily incomplete"),
             Self::TooLarge { url, limit } => {
                 write!(f, "Ekza feed {url} exceeded the {limit} byte JSON limit")
             }
@@ -76,6 +78,14 @@ pub(crate) fn build_client(timeout: Duration) -> Result<Client, RegistryError> {
 }
 
 pub(crate) fn get_json<T: DeserializeOwned>(client: &Client, url: Url) -> Result<T, RegistryError> {
+    read_json(client, url, false)
+}
+
+fn read_json<T: DeserializeOwned>(
+    client: &Client,
+    url: Url,
+    require_complete: bool,
+) -> Result<T, RegistryError> {
     let display = url.to_string();
     let response = client
         .get(url)
@@ -83,6 +93,17 @@ pub(crate) fn get_json<T: DeserializeOwned>(client: &Client, url: Url) -> Result
         .send()
         .map_err(|error| RegistryError::Transport(format!("{display}: {error}")))?;
     let status = response.status();
+    // Older v2 servers report a partial Studio outage with HTTP 200 and a
+    // header. Never allow that response to replace the last complete catalogue.
+    if require_complete
+        && status.is_success()
+        && response
+            .headers()
+            .get("x-studio-status")
+            .is_some_and(|value| value != "available")
+    {
+        return Err(RegistryError::Incomplete { url: display });
+    }
     let mut bytes = Vec::new();
     response
         .take(MAX_JSON_BYTES + 1)
@@ -228,7 +249,13 @@ impl RegistryClient {
             query.push(("profile", profile.to_string()));
         }
         let url = self.endpoint("v2/avatars", &query)?;
-        let response: CatalogV2Response = get_json(&self.client, url)?;
+        let response: CatalogV2Response = read_json(&self.client, url.clone(), true)?;
+        if response.schema != "ekza.avatar.catalog.v2" || response.count != response.items.len() {
+            return Err(RegistryError::Decode {
+                url: url.to_string(),
+                detail: "expected a complete ekza.avatar.catalog.v2 envelope".into(),
+            });
+        }
         Ok(response.items)
     }
 

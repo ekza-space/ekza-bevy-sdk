@@ -208,19 +208,21 @@ mod runtime {
         /// Fetch the approved catalogue and persist it for offline starts.
         pub fn refresh(&self) -> Result<Vec<StoreAvatar>, String> {
             // The unified feed carries Studio avatars too. A registry that predates
-            // it answers with an error; fall back to the template catalogue.
+            // it answers 404; only then fall back to the template catalogue.
+            // An outage or malformed response must leave the offline copy intact.
             let items = match self.registry.catalog_v2(
                 Some(&self.selector.project_id),
                 Some((&self.selector.platform, &self.selector.profile)),
             ) {
                 Ok(unified) => templates_v2(&unified, &self.selector),
-                Err(_) => {
+                Err(crate::registry::RegistryError::Status { status: 404, .. }) => {
                     let avatars = self
                         .registry
                         .catalog(None)
                         .map_err(|error| error.to_string())?;
                     templates(&avatars, &self.selector)
                 }
+                Err(error) => return Err(error.to_string()),
             };
             let document = StoreDocument {
                 schema: STORE_SCHEMA.into(),
