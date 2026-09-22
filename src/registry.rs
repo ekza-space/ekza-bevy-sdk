@@ -50,18 +50,43 @@ impl std::fmt::Display for RegistryError {
 
 impl std::error::Error for RegistryError {}
 
+/// Plain HTTP on one explicitly selected private IPv4 host is available only
+/// in debug builds. Release builds ignore both runtime and build-time settings.
+pub(crate) fn allowed_web_scheme(url: &Url) -> bool {
+    let host = std::env::var("EKZA_DEV_HTTP_HOST").ok();
+    allowed_web_scheme_for(
+        url,
+        cfg!(debug_assertions),
+        host.as_deref().or(option_env!("EKZA_DEV_HTTP_HOST")),
+    )
+}
+
+fn allowed_web_scheme_for(url: &Url, debug: bool, development_host: Option<&str>) -> bool {
+    if url.scheme() == "https" {
+        return true;
+    }
+    if url.scheme() != "http" {
+        return false;
+    }
+    if matches!(
+        url.host_str(),
+        Some("localhost" | "127.0.0.1" | "[::1]" | "0.0.0.0")
+    ) {
+        return true;
+    }
+    debug
+        && development_host.is_some_and(|host| {
+            host.parse::<std::net::Ipv4Addr>()
+                .is_ok_and(|ip| ip.is_private())
+                && url.host_str() == Some(host)
+        })
+}
+
 /// Accepts `https://` anywhere and plain `http://` only for loopback hosts, so
 /// a mistyped production URL can never downgrade to cleartext.
 pub fn feed_url(raw: &str) -> Result<Url, RegistryError> {
     let url = Url::parse(raw).map_err(|_| RegistryError::InvalidUrl(raw.to_string()))?;
-    let loopback = matches!(
-        url.host_str(),
-        Some("localhost" | "127.0.0.1" | "[::1]" | "0.0.0.0")
-    );
-    if !(url.scheme() == "https" || (url.scheme() == "http" && loopback))
-        || !url.username().is_empty()
-        || url.password().is_some()
-    {
+    if !allowed_web_scheme(&url) || !url.username().is_empty() || url.password().is_some() {
         return Err(RegistryError::InvalidUrl(raw.to_string()));
     }
     Ok(url)
@@ -355,5 +380,30 @@ mod tests {
     fn passport_client_requires_passport_path() {
         assert!(PassportCatalogClient::new("https://avatar.ekza.io").is_err());
         assert!(PassportCatalogClient::new("https://avatar.ekza.io/api/passport").is_ok());
+    }
+}
+
+#[cfg(test)]
+mod development_url_tests {
+    use super::*;
+    #[test]
+    fn lan_http_requires_exact_private_host_and_debug_build() {
+        let url = Url::parse("http://192.168.1.71:8018/v2/avatars").unwrap();
+        assert!(allowed_web_scheme_for(&url, true, Some("192.168.1.71")));
+        assert!(!allowed_web_scheme_for(&url, false, Some("192.168.1.71")));
+        assert!(!allowed_web_scheme_for(&url, true, None));
+        assert!(!allowed_web_scheme_for(&url, true, Some("192.168.1.72")));
+        let public = Url::parse("http://8.8.8.8/api").unwrap();
+        assert!(!allowed_web_scheme_for(&public, true, Some("8.8.8.8")));
+        assert!(!allowed_web_scheme_for(
+            &Url::parse("http://example.com").unwrap(),
+            true,
+            Some("example.com")
+        ));
+        assert!(allowed_web_scheme_for(
+            &Url::parse("https://registry.ekza.io").unwrap(),
+            false,
+            None
+        ));
     }
 }

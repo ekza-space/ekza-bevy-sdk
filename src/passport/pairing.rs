@@ -194,7 +194,7 @@ pub fn open_in_browser(url: &str) -> Result<(), String> {
 
 /// Verification links carry the public user code as a query; everything else
 /// follows the passport URL rules.
-fn safe_url_with_query(raw: &str) -> Result<String, String> {
+pub fn safe_url_with_query(raw: &str) -> Result<String, String> {
     let (base, _query) = raw.split_once('?').unwrap_or((raw, ""));
     if raw.contains('#') || raw.chars().any(char::is_whitespace) || raw.starts_with('-') {
         return Err("Invalid wallet verification link".into());

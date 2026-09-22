@@ -264,8 +264,7 @@ impl AccountClient {
             self.request("device", None, Some(json!({"projectId": self.project_id})))?;
         let link = Url::parse(&pairing.verification_url)
             .map_err(|_| "Invalid connection link".to_string())?;
-        let local = matches!(link.host_str(), Some("localhost" | "127.0.0.1" | "[::1]"));
-        if !(link.scheme() == "https" || (link.scheme() == "http" && local))
+        if !crate::registry::allowed_web_scheme(&link)
             || !link.username().is_empty()
             || link.password().is_some()
             || link.fragment().is_some()

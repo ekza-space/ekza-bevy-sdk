@@ -77,8 +77,7 @@ pub struct NativeSession {
 
 pub fn safe_url(raw: &str) -> Result<Url, String> {
     let url = Url::parse(raw).map_err(|_| "Invalid passport URL".to_string())?;
-    let local = matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "[::1]"));
-    if !(url.scheme() == "https" || (url.scheme() == "http" && local))
+    if !crate::registry::allowed_web_scheme(&url)
         || !url.username().is_empty()
         || url.password().is_some()
         || url.query().is_some()

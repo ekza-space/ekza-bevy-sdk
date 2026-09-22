@@ -235,3 +235,7 @@ original expiration. Tokens are opaque, project-scoped credentials, not wallet
 keys or Studio administration sessions. Never log or publish the credential.
 The file helper uses atomic replacement and Unix owner-only permissions; native
 applications may instead store its serialized form in their platform keychain.
+
+### Native LAN development
+
+Debug builds may explicitly set `EKZA_DEV_HTTP_HOST` to one private IPv4 address (runtime environment or Cargo build environment). Registry, account approval, verified downloads and browser links then accept HTTP on that exact host. This does not skip authentication, approval, size or hash checks. Release builds ignore this setting; use HTTPS there. Never use a production account on a plain-HTTP test network. `passport::pairing::safe_url_with_query` is available for native platform browser bridges.
