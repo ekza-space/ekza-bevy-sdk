@@ -211,6 +211,27 @@ cargo run --example registry_sync --no-default-features --features http -- --hel
 - Passport structs describe evidence, not ownership. Servers consume one-use
   tickets at their configured passport origin and never trust a
   client-submitted mint, slug or JSON object.
-- This crate does not do account auth, payments, CDN signing or licence
+- This crate does not handle account passwords, payments, CDN signing or licence
   enforcement. Downloads are blocking; run them off the render thread.
 - Network downgrade is refused: `http://` is accepted only for loopback hosts.
+
+## Persist an Ekza account connection
+
+After device-code approval, save `session.credential()` with
+`AccountCredential::save(path)` in a dedicated private directory. On startup,
+load it with `AccountCredential::load(path)` and call
+`AccountClient::restore(&credential, &selector)`. Restore validates the exact
+Registry URL and project before sending the token, then reads the live library.
+No cached display name is trusted as an identity.
+
+Use `refresh_checked()` periodically. `AccountError::Unauthorized` means the
+connection expired or was revoked: clear the session and its file. Preserve the
+credential on `Unavailable` and retry. `InvalidCredential` prevents using a saved
+connection against a different server or project. Logout removes the file;
+Studio Account can revoke a connection server-side.
+
+New Registry connections last up to 90 days. Existing connections keep their
+original expiration. Tokens are opaque, project-scoped credentials, not wallet
+keys or Studio administration sessions. Never log or publish the credential.
+The file helper uses atomic replacement and Unix owner-only permissions; native
+applications may instead store its serialized form in their platform keychain.

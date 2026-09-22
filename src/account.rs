@@ -19,7 +19,8 @@
 //! }
 //! ```
 //!
-//! The device code and the token stay in memory and never appear in URLs, logs or
+//! Device codes stay in memory. Scoped credentials may be explicitly persisted with
+//! owner-only permissions; secrets never appear in URLs, logs or
 //! `Debug` output. The token is not an entitlement: a game server still decides
 //! admission from its own registry read (free avatars) or a passport ticket (owned).
 
@@ -33,7 +34,7 @@ use std::{
 };
 
 use reqwest::{Url, blocking::Client, redirect::Policy};
-use serde::{Deserialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::{Value, json};
 
 use crate::{
@@ -41,6 +42,41 @@ use crate::{
     passport::{SupportSelector, client::safe_url, pairing::PairingState},
     store::{StoreAvatar, templates_v2},
 };
+
+mod credential;
+pub use credential::AccountCredential;
+
+/// Only a confirmed authorization rejection should discard a saved connection.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AccountError {
+    Unauthorized,
+    InvalidCredential,
+    Unavailable(String),
+}
+impl std::fmt::Display for AccountError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Unauthorized => {
+                f.write_str("This game is no longer connected. Connect your Ekza account again.")
+            }
+            Self::InvalidCredential => {
+                f.write_str("The saved connection belongs to another server or game.")
+            }
+            Self::Unavailable(message) => f.write_str(message),
+        }
+    }
+}
+impl std::error::Error for AccountError {}
+impl From<String> for AccountError {
+    fn from(message: String) -> Self {
+        Self::Unavailable(message)
+    }
+}
+impl From<&str> for AccountError {
+    fn from(message: &str) -> Self {
+        Self::Unavailable(message.into())
+    }
+}
 
 pub const LIBRARY_SCHEMA: &str = "ekza.account.library.v1";
 const MAX_JSON_BYTES: u64 = 8 * 1024 * 1024;
@@ -140,6 +176,30 @@ impl AccountClient {
         })
     }
 
+    /// Restore only after a fresh server check; never infer identity from disk.
+    pub fn restore(
+        &self,
+        credential: &AccountCredential,
+        selector: &SupportSelector,
+    ) -> Result<AccountSession, AccountError> {
+        if credential.base != self.base.as_str().trim_end_matches('/')
+            || credential.project_id != self.project_id
+            || credential.token.is_empty()
+            || credential.token.len() > 256
+        {
+            return Err(AccountError::InvalidCredential);
+        }
+        let mut session = AccountSession {
+            api: self.clone(),
+            token: credential.token.clone(),
+            selector: selector.clone(),
+            username: String::new(),
+            items: Vec::new(),
+        };
+        session.refresh_checked()?;
+        Ok(session)
+    }
+
     pub fn project_id(&self) -> &str {
         &self.project_id
     }
@@ -150,6 +210,16 @@ impl AccountClient {
         token: Option<&str>,
         body: Option<Value>,
     ) -> Result<T, String> {
+        self.request_checked(path, token, body)
+            .map_err(|error| error.to_string())
+    }
+
+    fn request_checked<T: DeserializeOwned>(
+        &self,
+        path: &str,
+        token: Option<&str>,
+        body: Option<Value>,
+    ) -> Result<T, AccountError> {
         let endpoint = format!(
             "{}/v1/account/{path}",
             self.base.as_str().trim_end_matches('/')
@@ -176,14 +246,12 @@ impl AccountClient {
         if !status.is_success() {
             // Remote error text may leak details; map status to safe copy.
             return Err(match status.as_u16() {
-                401 | 403 => {
-                    "This game is no longer connected. Connect your Ekza account again.".into()
-                }
+                401 | 403 => AccountError::Unauthorized,
                 404 => "This game is not registered with Ekza.".into(),
                 410 => "The connection code expired. Connect again.".into(),
                 429 => "Too many connection attempts. Wait and retry.".into(),
                 503 => "Account connection is not available on this Ekza server.".into(),
-                _ => format!("Ekza request failed (HTTP {}). Retry.", status.as_u16()),
+                _ => format!("Ekza request failed (HTTP {}). Retry.", status.as_u16()).into(),
             });
         }
         serde_json::from_slice(&bytes).map_err(|_| "Invalid Ekza response".into())
@@ -239,7 +307,13 @@ impl AccountClient {
 impl AccountSession {
     /// Re-read the library, e.g. after the player saved an avatar in the browser.
     pub fn refresh(&mut self) -> Result<(), String> {
-        let library: LibraryResponse = self.api.request("library", Some(&self.token), None)?;
+        self.refresh_checked().map_err(|error| error.to_string())
+    }
+
+    pub fn refresh_checked(&mut self) -> Result<(), AccountError> {
+        let library: LibraryResponse =
+            self.api
+                .request_checked("library", Some(&self.token), None)?;
         if library.schema != LIBRARY_SCHEMA || library.project_id != self.api.project_id {
             return Err("The Ekza library belongs to a different game or schema".into());
         }
@@ -247,6 +321,15 @@ impl AccountSession {
         // The same validation as the public store: identity, exact selector, hash, size.
         self.items = templates_v2(&library.items, &self.selector);
         Ok(())
+    }
+
+    /// Contains a bearer secret. Save only to private application storage.
+    pub fn credential(&self) -> AccountCredential {
+        AccountCredential {
+            base: self.api.base.as_str().trim_end_matches('/').into(),
+            project_id: self.api.project_id.clone(),
+            token: self.token.clone(),
+        }
     }
 
     pub fn has(&self, slug: &str) -> bool {

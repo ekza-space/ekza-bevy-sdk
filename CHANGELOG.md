@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.0 — persistent account connections
+
+- Add explicit backend/project-scoped account credentials with atomic private
+  file persistence and fresh server validation on restoration.
+- Distinguish revocation from temporary transport failures with `AccountError`
+  and `refresh_checked`, preserving the existing string-error methods.
+- Cover restart, cross-project refusal, outage retention and revoked sessions
+  against a real loopback HTTP server.
+
+
 ## Unreleased — 2026-09-21
 
 - Keep the last complete catalogue on v2 outages, malformed responses, and older
