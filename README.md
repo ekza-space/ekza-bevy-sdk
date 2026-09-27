@@ -209,3 +209,27 @@ cargo run --example registry_sync --no-default-features --features http -- --hel
 - This crate does not do account auth, payments, CDN signing or licence
   enforcement. Downloads are blocking; run them off the render thread.
 - Network downgrade is refused: `http://` is accepted only for loopback hosts.
+
+## License
+
+Licensed under either of
+
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or <https://www.apache.org/licenses/LICENSE-2.0>)
+- MIT license ([LICENSE-MIT](LICENSE-MIT) or <https://opensource.org/licenses/MIT>)
+
+at your option. This is the same dual license used across the Bevy ecosystem,
+so the SDK can be embedded in open-source and closed-source games alike. The
+grant covers every published revision of this repository, including those made
+before the license files were added.
+
+The license covers this crate's code and the data formats it defines. It does
+not grant rights to avatars or other content served by an Ekza registry (each
+asset carries its own terms), to Ekza services, or to the Ekza name and logo.
+You may say a game "uses the Ekza SDK"; do not imply endorsement or Ekza
+approval of a game or asset without permission.
+
+### Contribution
+
+Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
+dual licensed as above, without any additional terms or conditions.

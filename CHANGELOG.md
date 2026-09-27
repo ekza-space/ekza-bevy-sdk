@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- License: dual `MIT OR Apache-2.0` (`LICENSE-MIT`, `LICENSE-APACHE`, `license` in
+  `Cargo.toml`). Applies to all published revisions. Registry content, Ekza
+  services and the Ekza name are not covered.
+
 ## 0.6.0 — 2026-09-20
 
 ### Added
