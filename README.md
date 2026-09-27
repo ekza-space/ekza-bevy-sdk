@@ -219,14 +219,13 @@ Licensed under either of
 
 at your option. This is the same dual license used across the Bevy ecosystem,
 so the SDK can be embedded in open-source and closed-source games alike. The
-grant covers every published revision of this repository, including those made
-before the license files were added.
+copyright holder also offers earlier revisions of this repository under the
+same terms.
 
 The license covers this crate's code and the data formats it defines. It does
 not grant rights to avatars or other content served by an Ekza registry (each
-asset carries its own terms), to Ekza services, or to the Ekza name and logo.
-You may say a game "uses the Ekza SDK"; do not imply endorsement or Ekza
-approval of a game or asset without permission.
+asset carries its own terms), to Ekza services, or to the Ekza name and logo;
+see [TRADEMARKS.md](TRADEMARKS.md).
 
 ### Contribution
 

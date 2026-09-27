@@ -5,8 +5,10 @@
 ### Added
 
 - License: dual `MIT OR Apache-2.0` (`LICENSE-MIT`, `LICENSE-APACHE`, `license` in
-  `Cargo.toml`). Applies to all published revisions. Registry content, Ekza
-  services and the Ekza name are not covered.
+  `Cargo.toml`). Earlier revisions are offered under the same terms. Registry
+  content, Ekza services and the Ekza name are not covered.
+- `TRADEMARKS.md`: truthful reference ("uses the Ekza SDK") is free; forks and
+  services need their own branding and must not imply official status.
 
 ## 0.6.0 — 2026-09-20
 
