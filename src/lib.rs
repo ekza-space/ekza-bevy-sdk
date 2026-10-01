@@ -11,6 +11,8 @@
 //!   [`roster::sync::sync_roster`] (`http`) to fill it from the feeds.
 //! - [`store`] — runtime store for a live game: approved templates for a
 //!   selector, offline catalogue, verified on-demand install (`http`).
+//! - [`assets`] — typed avatar/weapon catalogue and approved free-asset store,
+//!   with independent identities and game-specific install validation (`http`).
 //! - [`passport`] — purchased-avatar contracts; [`passport::client`] (`http`)
 //!   pairs a wallet, lists purchases, issues/consumes tickets and downloads
 //!   approved renditions.
@@ -23,6 +25,7 @@
 
 use serde::{Deserialize, Serialize};
 
+pub mod assets;
 pub mod catalog;
 pub mod passport;
 pub mod roster;

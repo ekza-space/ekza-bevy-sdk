@@ -284,6 +284,36 @@ impl RegistryClient {
         Ok(response.items)
     }
 
+    /// Typed approved assets. No legacy fallback: `/v2/avatars` cannot prove a
+    /// weapon's kind. The caller still validates the exact approval and bytes.
+    pub fn assets_v2(
+        &self,
+        kind: crate::assets::AssetKind,
+        project: Option<&str>,
+        selector: Option<(&str, &str)>,
+    ) -> Result<Vec<crate::assets::CatalogAsset>, RegistryError> {
+        let mut query = vec![("kind", kind.as_str().to_string())];
+        if let Some(project) = project {
+            query.push(("project", project.to_string()));
+        }
+        if let Some((platform, profile)) = selector {
+            query.push(("platform", platform.to_string()));
+            query.push(("profile", profile.to_string()));
+        }
+        let url = self.endpoint("v2/assets", &query)?;
+        let response: crate::assets::AssetCatalogResponse =
+            read_json(&self.client, url.clone(), true)?;
+        if response.schema != crate::assets::CATALOG_SCHEMA
+            || response.count != response.items.len()
+        {
+            return Err(RegistryError::Decode {
+                url: url.to_string(),
+                detail: "expected a complete ekza.asset.catalog.v2 envelope".into(),
+            });
+        }
+        Ok(response.items)
+    }
+
     /// Exact rendition resolution for one avatar.
     pub fn resolve(
         &self,

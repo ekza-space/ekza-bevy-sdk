@@ -240,6 +240,49 @@ applications may instead store its serialized form in their platform keychain.
 
 Debug builds may explicitly set `EKZA_DEV_HTTP_HOST` to one private IPv4 address (runtime environment or Cargo build environment). Registry, account approval, verified downloads and browser links then accept HTTP on that exact host. This does not skip authentication, approval, size or hash checks. Release builds ignore this setting; use HTTPS there. Never use a production account on a plain-HTTP test network. `passport::pairing::safe_url_with_query` is available for native platform browser bridges.
 
+## Approved weapons and typed assets
+
+SDK 0.8 adds `assets::{AssetKind, AssetStore, StoreAsset}` and
+`RegistryClient::assets_v2` for `/v2/assets`. Weapons have canonical IDs
+`ekza:weapon:<uuid>`; they cannot pass avatar identity validation. The typed
+catalogue uses `ekza.asset.catalog.v2` with `count`, `items`, an explicit
+`assetKind`, and the existing rendition/project approval fields.
+
+```rust,no_run
+use ekza_bevy_sdk::{assets::{AssetKind, AssetStore}, passport::SupportSelector};
+# fn example() -> Result<(), String> {
+let store = AssetStore::new(
+    "/writable/game/ekza-store",
+    "https://registry.ekza.io",
+    AssetKind::Weapon,
+    SupportSelector::new("omoba", "desktop", "handheld-glb-v1", &["glb"]),
+)?;
+let approved = store.refresh()?;
+// Run off the rendering thread. Validate the game's static GLB/grip contract
+// inside the callback before making the returned path renderable.
+# fn validate_handheld_glb(_: &[u8]) -> Result<(), String> { Ok(()) }
+if let Some(item) = approved.first() {
+    let model = store.install(item, validate_handheld_glb)?;
+}
+# Ok(()) }
+```
+
+`assets::templates` and `assets::validate_item` expose the same approval checks
+to game servers that only need catalogue metadata. Only explicitly **free**,
+exactly approved GLB renditions qualify. Paid weapons require a future
+entitlement flow and are deliberately excluded. Unknown kinds/identities and
+unapproved or ambiguous rendition selectors fail closed.
+
+Files use `weapons/<slug>.glb` and the shared verified `.ekza-cache`. Catalogue
+metadata is isolated by registry origin, asset kind and selector, so avatar and
+weapon stores can share one writable engine asset source. A failed/incomplete
+refresh preserves the last complete catalogue; a successful empty catalogue
+removes eligibility but retains bytes. Reused installs still run the consumer
+validator. A server must independently read approvals and check current selection
+eligibility: having cached bytes, or passing `install` an older approved item,
+does not prove a release is still available. The SDK does not accept gameplay
+packets or decide server refresh/revocation policy.
+
 ## License
 
 Licensed under either of

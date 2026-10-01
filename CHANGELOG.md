@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.8.0 — typed approved assets
+
+- Add `/v2/assets` discovery with explicit avatar/weapon kinds and strict canonical
+  identities. Existing avatar DTOs, APIs and identity validation stay compatible.
+- Add a reusable free-asset store with exact game/profile approval, bounded
+  SHA-256 verified download, game-specific validation, atomic installation and
+  cache metadata isolated by registry origin, kind and selector.
+- Preserve known catalogue eligibility on outages or malformed responses; a
+  healthy empty catalogue clears eligibility without deleting cached files.
+  Weapon IDs retain the existing handheld pilot's source/content hash algorithm.
+- Cover typed approval failures, live HTTP downloads, corruption, validator
+  rejection, offline reuse, withdrawal and content revision replacement.
+
 ## 0.7.0 — persistent account connections
 
 - Add explicit backend/project-scoped account credentials with atomic private
