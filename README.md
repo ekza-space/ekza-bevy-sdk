@@ -239,3 +239,26 @@ applications may instead store its serialized form in their platform keychain.
 ### Native LAN development
 
 Debug builds may explicitly set `EKZA_DEV_HTTP_HOST` to one private IPv4 address (runtime environment or Cargo build environment). Registry, account approval, verified downloads and browser links then accept HTTP on that exact host. This does not skip authentication, approval, size or hash checks. Release builds ignore this setting; use HTTPS there. Never use a production account on a plain-HTTP test network. `passport::pairing::safe_url_with_query` is available for native platform browser bridges.
+
+## License
+
+Licensed under either of
+
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or <https://www.apache.org/licenses/LICENSE-2.0>)
+- MIT license ([LICENSE-MIT](LICENSE-MIT) or <https://opensource.org/licenses/MIT>)
+
+at your option. This is the same dual license used across the Bevy ecosystem,
+so the SDK can be embedded in open-source and closed-source games alike. The
+copyright holder also offers earlier revisions of this repository under the
+same terms.
+
+The license covers this crate's code and the data formats it defines. It does
+not grant rights to avatars or other content served by an Ekza registry (each
+asset carries its own terms), to Ekza services, or to the Ekza name and logo;
+see [TRADEMARKS.md](TRADEMARKS.md).
+
+### Contribution
+
+Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
+dual licensed as above, without any additional terms or conditions.
