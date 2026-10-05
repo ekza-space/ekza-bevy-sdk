@@ -1,6 +1,6 @@
 [package]
 name = "ekza-bevy-sdk"
-version = "0.8.0"
+version = "0.9.0"
 edition = "2024"
 description = "Ekza avatar SDK: catalogue, verified asset cache, passport client and Bevy integration for loading Ekza avatars into 2D/3D games"
 repository = "https://github.com/ekza-space/ekza-bevy-sdk"
@@ -14,7 +14,7 @@ http = ["dep:reqwest"]
 bevy = ["dep:bevy", "http"]
 
 [dependencies]
-bevy = { version = "0.18.0", optional = true }
+bevy = { version = "0.19.1", optional = true }
 # rustls keeps mobile and Linux consumers free of a system OpenSSL dependency.
 reqwest = { version = "0.12.15", default-features = false, features = ["blocking", "json", "rustls-tls"], optional = true }
 serde = { version = "1.0.219", features = ["derive"] }

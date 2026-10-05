@@ -15,7 +15,10 @@ fn server(statuses: Vec<u16>) -> (String, thread::JoinHandle<()>) {
         for status in statuses {
             let (mut socket, _) = listener.accept().unwrap();
             let mut bytes = [0; 4096];
-            socket.read(&mut bytes).unwrap();
+            assert!(
+                socket.read(&mut bytes).unwrap() > 0,
+                "client must send a request"
+            );
             let body = r#"{"schema":"ekza.account.library.v1","projectId":"omoba","account":{"username":"Saved player"},"items":[]}"#;
             write!(
                 socket,

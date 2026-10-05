@@ -9,7 +9,7 @@ use crate::{
 
 #[derive(Clone)]
 pub struct EkzaModelHandles {
-    pub scene: Option<Handle<Scene>>,
+    pub scene: Option<Handle<WorldAsset>>,
     pub gltf: Option<Handle<Gltf>>,
     pub label: String,
 }
@@ -27,7 +27,7 @@ impl EkzaModelCatalog {
     pub fn handles_for(
         &self,
         character: EkzaCharacter,
-    ) -> (Option<Handle<Scene>>, Option<Handle<Gltf>>) {
+    ) -> (Option<Handle<WorldAsset>>, Option<Handle<Gltf>>) {
         self.entries
             .get(&character)
             .map(|entry| (entry.scene.clone(), entry.gltf.clone()))
@@ -205,14 +205,14 @@ impl EkzaRosterCatalog {
         self.definitions.get(slug)
     }
 
-    pub fn handles_for(&self, slug: &str) -> (Option<Handle<Scene>>, Option<Handle<Gltf>>) {
+    pub fn handles_for(&self, slug: &str) -> (Option<Handle<WorldAsset>>, Option<Handle<Gltf>>) {
         self.entries
             .get(slug)
             .map(|entry| (entry.scene.clone(), entry.gltf.clone()))
             .unwrap_or((None, None))
     }
 
-    pub fn scene(&self, slug: &str) -> Option<Handle<Scene>> {
+    pub fn scene(&self, slug: &str) -> Option<Handle<WorldAsset>> {
         self.entries.get(slug).and_then(|entry| entry.scene.clone())
     }
 

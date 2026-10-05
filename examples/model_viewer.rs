@@ -1,11 +1,15 @@
-use std::{env, fs, path::PathBuf, process::ExitCode};
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+    process::ExitCode,
+};
 
 use bevy::{
     asset::AssetPlugin,
     camera::primitives::Aabb,
     input::mouse::{MouseMotion, MouseWheel},
     prelude::*,
-    scene::SceneRoot,
+    world_serialization::WorldAssetRoot,
 };
 use ekza_bevy_sdk::{
     EkzaCharacter, GlbValidationRules,
@@ -147,11 +151,11 @@ fn parse_character(raw: &str) -> Result<EkzaCharacter, String> {
     }
 }
 
-fn prepare_explicit_glb(asset_root: &PathBuf, glb: PathBuf) -> Result<(PathBuf, String), String> {
+fn prepare_explicit_glb(asset_root: &Path, glb: PathBuf) -> Result<(PathBuf, String), String> {
     if glb.is_relative() && asset_root.join(&glb).exists() {
         validate_file_or_error(&asset_root.join(&glb))?;
         return Ok((
-            existing_absolute_path(asset_root.clone()),
+            existing_absolute_path(asset_root.to_path_buf()),
             glb.to_string_lossy().to_string(),
         ));
     }
@@ -229,7 +233,7 @@ fn setup(
 
     if let Some(scene) = handles.scene {
         commands.spawn((
-            SceneRoot(scene),
+            WorldAssetRoot(scene),
             Transform::from_translation(Vec3::ZERO),
             ViewedModelRoot {
                 label: handles.label.clone(),
@@ -266,7 +270,7 @@ fn setup(
     commands.spawn((
         DirectionalLight {
             illuminance: 25_000.0,
-            shadows_enabled: true,
+            shadow_maps_enabled: true,
             ..default()
         },
         Transform::from_rotation(Quat::from_euler(EulerRot::ZYX, 0.0, 0.75, -0.8)),

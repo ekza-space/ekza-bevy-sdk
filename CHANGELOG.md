@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.0
+
+- Upgrade the optional Bevy integration to Bevy 0.19.1 and Rust 1.95.0. Model handles use `WorldAsset`; GLB scene labels remain unchanged.
+- Preserve the 0.8 account, catalogue, verified cache, avatar and weapon lifecycle APIs. HTTP-only consumers still opt out of Bevy.
+
+
 ## 0.8.0 — typed approved assets
 
 - Add `/v2/assets` discovery with explicit avatar/weapon kinds and strict canonical

@@ -80,7 +80,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     let catalog = load_roster_catalog(&asset_server, Path::new("assets"));
     for slug in catalog.slugs() {
         if let Some(scene) = catalog.scene(slug) {
-            commands.spawn(SceneRoot(scene));
+            commands.spawn(WorldAssetRoot(scene));
         }
     }
     commands.insert_resource(catalog);
@@ -305,3 +305,5 @@ see [TRADEMARKS.md](TRADEMARKS.md).
 Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
 dual licensed as above, without any additional terms or conditions.
+
+SDK 0.9 targets Bevy 0.19.1 (Rust 1.95.0). Replace `SceneRoot` with `WorldAssetRoot` and `Handle<Scene>` with `Handle<WorldAsset>` in Bevy consumers. Existing GLB `#Scene0` labels, account credentials and catalogue wire formats are unchanged.

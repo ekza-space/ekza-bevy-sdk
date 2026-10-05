@@ -17,7 +17,7 @@
 //!   pairs a wallet, lists purchases, issues/consumes tickets and downloads
 //!   approved renditions.
 //! - [`validation`] — GLB validation used by every layer.
-//! - [`bevy`] (`bevy`) — resources turning roster entries into `Scene`/`Gltf`
+//! - [`bevy`] (`bevy`) — resources turning roster entries into `WorldAsset`/`Gltf`
 //!   handles.
 //!
 //! The legacy [`EkzaCharacter`] enum and [`BUILTIN_MODEL_MANIFEST`] stay for

@@ -32,7 +32,7 @@ fn selector() -> SupportSelector {
 fn model() -> Vec<u8> {
     let mut json =
         br#"{"asset":{"version":"2.0"},"scene":0,"scenes":[{"nodes":[0]}],"nodes":[{}]}"#.to_vec();
-    while json.len() % 4 != 0 {
+    while !json.len().is_multiple_of(4) {
         json.push(b' ');
     }
     let mut bytes = b"glTF".to_vec();

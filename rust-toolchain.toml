@@ -1,0 +1,4 @@
+# Pinned with Bevy 0.19.1 minimum supported Rust version.
+[toolchain]
+channel = "1.95.0"
+components = ["rustfmt", "clippy"]

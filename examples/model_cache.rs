@@ -1,4 +1,8 @@
-use std::{env, path::PathBuf, process::ExitCode};
+use std::{
+    env,
+    path::{Path, PathBuf},
+    process::ExitCode,
+};
 
 use ekza_bevy_sdk::{
     BUILTIN_MODEL_MANIFEST, EkzaCharacter, GlbValidationRules, ModelEntry, ModelSource,
@@ -90,7 +94,7 @@ fn parse_character(raw: &str) -> Result<EkzaCharacter, String> {
     }
 }
 
-fn verify_entry(entry: ModelEntry, asset_root: &PathBuf) -> Result<(), String> {
+fn verify_entry(entry: ModelEntry, asset_root: &Path) -> Result<(), String> {
     match entry.source {
         ModelSource::LocalGlb { path, .. } => {
             let final_path = asset_root.join(path);
