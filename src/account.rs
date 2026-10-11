@@ -46,7 +46,10 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::{Value, json};
 
 use crate::{
-    assets::{AssetKind, LibraryAsset, StoreAsset, deserialize_library_assets, library_templates},
+    assets::{
+        AssetKind, CatalogAsset, LibraryAsset, StoreAsset, deserialize_library_assets,
+        library_templates,
+    },
     catalog::CatalogV2Avatar,
     passport::{SupportSelector, client::safe_url, pairing::PairingState},
     store::{StoreAvatar, templates_v2},
@@ -428,10 +431,21 @@ impl AccountSession {
         library_templates(&self.assets, kind, selector)
     }
 
-    /// True when the library lists this canonical id (`ekza:weapon:<uuid>`,
-    /// `ekza:avatar:<uuid>`, ...), whatever its approval or access. Use
-    /// [`Self::assets`] for what the game may install.
+    /// True when the library lists this asset, whatever its approval or access.
+    /// `id` is either a canonical id (`ekza:weapon:<uuid>`, `ekza:avatar:<uuid>`,
+    /// `solana:devnet:avatar-data:<key>`), matched exactly, or a bare Studio
+    /// asset UUID in any letter case, matched against the `<uuid>` of an
+    /// `ekza:<kind>:<uuid>` id of any kind. These are the two forms the
+    /// registry's claim route accepts. Use [`Self::assets`] for what the game
+    /// may install.
     pub fn has_asset(&self, id: &str) -> bool {
+        let uuid = id.to_ascii_lowercase();
+        if crate::passport::valid_uuid(&uuid) {
+            return self
+                .assets
+                .iter()
+                .any(|entry| studio_uuid(&entry.asset) == Some(uuid.as_str()));
+        }
         self.assets.iter().any(|entry| entry.asset.id == id)
     }
 
@@ -440,6 +454,15 @@ impl AccountSession {
     pub fn library_assets(&self) -> &[LibraryAsset] {
         &self.assets
     }
+}
+
+/// The `<uuid>` of an `ekza:<kind>:<uuid>` id; `None` for on-chain identities.
+fn studio_uuid(asset: &CatalogAsset) -> Option<&str> {
+    asset
+        .id
+        .strip_prefix("ekza:")?
+        .strip_prefix(asset.asset_kind.as_str())?
+        .strip_prefix(':')
 }
 
 struct Shared {

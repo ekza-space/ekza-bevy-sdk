@@ -232,12 +232,16 @@ fn library_assets_list_every_kind_and_filter_by_the_store_selector() {
             .all(|item| item.protected.avatar_id == AVATAR)
     );
 
-    // Membership is by canonical id, whatever the approval or access.
+    // Membership by canonical id or bare Studio UUID (any kind, any letter
+    // case), whatever the approval or access.
     for id in [
         AVATAR,
         WILDSPARK,
         "ekza:weapon:22222222-0000-4000-8000-000000000002",
         "ekza:weapon:33333333-0000-4000-8000-000000000003",
+        "11111111-2222-4333-8444-555555555555",
+        "38A9903E-0000-4000-8000-000000000001",
+        "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa",
     ] {
         assert!(session.has_asset(id), "{id}");
     }
@@ -247,7 +251,17 @@ fn library_assets_list_every_kind_and_filter_by_the_store_selector() {
         "ekza:weapon:88888888-0000-4000-8000-000000000008",
         "ekza:weapon:99999999-0000-4000-8000-000000000009",
         "ekza:weapon:aaaaaaaa-0000-4000-8000-00000000000a",
-        "11111111-2222-4333-8444-555555555555",
+        // Entries that were skipped stay unknown by UUID too.
+        "77777777-0000-4000-8000-000000000007",
+        "bbbbbbbb-0000-4000-8000-00000000000b",
+        "aaaaaaaa-0000-4000-8000-00000000000a",
+        // Canonical ids match exactly; near-misses never do.
+        "ekza:weapon:11111111-2222-4333-8444-55555555555A",
+        "EKZA:WEAPON:11111111-2222-4333-8444-555555555555",
+        "ekza:avatar:11111111-2222-4333-8444-555555555555",
+        " 11111111-2222-4333-8444-555555555555",
+        "{11111111-2222-4333-8444-555555555555}",
+        "11111111222243338444555555555555",
         "",
     ] {
         assert!(!session.has_asset(id), "{id}");

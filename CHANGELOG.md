@@ -24,6 +24,10 @@
   anything else, including `404`/`405` from registries without the endpoint, is
   `Unavailable`. A credential for another registry or game is refused before its
   token is sent.
+- `AccountSession::has_asset` also accepts a bare Studio asset UUID (any letter
+  case), matched against the `<uuid>` of `ekza:<kind>:<uuid>` ids of any kind,
+  the same two forms the Registry claim route takes. Canonical ids still match
+  exactly; a bare UUID used to return `false`.
 
 ## 0.9.0
 

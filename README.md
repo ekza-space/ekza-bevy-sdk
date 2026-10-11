@@ -308,15 +308,20 @@ for item in session.assets(AssetKind::Weapon, weapons.selector()) {
     // The same StoreAsset (slug, approval, rendition) as `weapons.refresh()`;
     // `weapons.install(&item, validator)` accepts it.
 }
-let claimed = session.has_asset("ekza:weapon:11111111-2222-4333-8444-555555555555");
+let listed = session.has_asset("ekza:weapon:11111111-2222-4333-8444-555555555555");
+// The same answer for the bare Studio asset UUID, as the claim route accepts it.
+assert_eq!(listed, session.has_asset("11111111-2222-4333-8444-555555555555"));
 for entry in session.library_assets() { /* entry.asset, entry.reason */ }
 # }
 ```
 
 `assets(kind, selector)` applies `assets::templates`: explicitly free, exactly
 approved, unambiguous GLB renditions with a canonical identity of that kind.
-`has_asset(id)` answers library membership for a canonical id whatever its
-approval or access. Entries are parsed one at a time: unknown kinds, malformed
+`has_asset(id)` answers library membership whatever the approval or access. It
+takes a canonical id, matched exactly (`ekza:weapon:<uuid>`, `ekza:avatar:<uuid>`,
+`solana:devnet:avatar-data:<key>`), or a bare Studio asset UUID in any letter
+case, matched against the `<uuid>` of an `ekza:<kind>:<uuid>` id of any kind.
+Entries are parsed one at a time: unknown kinds, malformed
 items and identities that do not match their kind are skipped without failing
 the session, and a missing, null or non-array `assets` means an empty library.
 Like `/v2/assets`, the library lists one entry per visible revision, so an id
