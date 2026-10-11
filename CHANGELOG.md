@@ -28,6 +28,13 @@
   case), matched against the `<uuid>` of `ekza:<kind>:<uuid>` ids of any kind,
   the same two forms the Registry claim route takes. Canonical ids still match
   exactly; a bare UUID used to return `false`.
+- Keep the licence's credit line: `StoreAsset::attribution` and
+  `StoreAvatar::attribution` (`license.attribution` from `/v2/assets`,
+  `/v2/avatars` and the account library; `None` when blank or from the legacy
+  `/v1/avatars` feed, which folds it into `author`). Plus
+  `CatalogV2License::credit()`. Optional and skipped when `None`, so persisted
+  store files stay compatible in both directions. Code that builds these
+  structs with a literal must add `attribution: None`.
 
 ## 0.9.0
 

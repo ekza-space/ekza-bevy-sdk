@@ -527,6 +527,15 @@ pub struct CatalogV2License {
     pub attribution: String,
 }
 
+impl CatalogV2License {
+    /// The credit line the licence asks games to show (e.g. for CC-BY), trimmed;
+    /// `None` when blank.
+    pub fn credit(&self) -> Option<String> {
+        let attribution = self.attribution.trim();
+        (!attribution.is_empty()).then(|| attribution.to_owned())
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CatalogV2Creator {
     #[serde(default)]

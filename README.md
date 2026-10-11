@@ -334,6 +334,17 @@ saved credentials keep their format and restore reads the live library.
 Library membership is a wardrobe filter, not an entitlement. A game server
 still admits free assets from its own registry read.
 
+### Credits
+
+`StoreAsset` and `StoreAvatar` carry `author` (the creator), `license` (the
+licence text, e.g. `CC-BY-4.0`) and `attribution`: the licence's credit line
+(`license.attribution` in `/v2/assets`, `/v2/avatars` and the account library),
+trimmed, `None` when blank. CC-BY and similar licences require that line to be
+shown with the item, so display it whenever it is present. The legacy
+`/v1/avatars` feed already folds its attribution into `author`, and its items
+have no `attribution`. Store files written by older SDKs load with `None` until
+the next successful refresh.
+
 ## License
 
 Licensed under either of

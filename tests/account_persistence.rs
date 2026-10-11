@@ -171,6 +171,9 @@ fn library_assets_list_every_kind_and_filter_by_the_store_selector() {
             )
         );
         assert!(validate_item(item, AssetKind::Weapon, &weapons()).is_ok());
+        // The CC-BY credit line travels with the item.
+        assert_eq!(item.license.as_deref(), Some("CC-BY-4.0"));
+        assert_eq!(item.attribution.as_deref(), Some("wildspark-maker"));
     }
     // Desktop gets the revision it pins, not the newer android one listed first.
     assert_eq!(

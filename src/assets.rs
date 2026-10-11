@@ -89,6 +89,10 @@ pub struct StoreAsset {
     pub author: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub license: Option<String>,
+    /// The licence's credit line (`license.attribution`), which CC-BY and
+    /// similar licences require games to show with the item. `None` when blank.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attribution: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub thumbnail_url: Option<String>,
     pub support: ProjectSupport,
@@ -250,6 +254,7 @@ fn select<'a>(
                 name: asset.name.clone(),
                 author: asset.creator.as_ref().map(|creator| creator.name.clone()),
                 license: asset.license.as_ref().map(|license| license.text.clone()),
+                attribution: asset.license.as_ref().and_then(CatalogV2License::credit),
                 thumbnail_url: asset.thumbnail_url.clone(),
                 support: ProjectSupport {
                     project_id: approval.project_id.clone(),
@@ -599,5 +604,72 @@ mod tests {
                 asset_slug(AssetKind::Weapon, &owned[0].asset_id, &sha.repeat(32))
             );
         }
+    }
+
+    #[test]
+    fn the_licence_credit_line_reaches_store_items() {
+        let selector = SupportSelector::new("omoba", "desktop", "handheld-glb-v1", &["glb"]);
+        let licensed = |uuid: &str, license: serde_json::Value| {
+            let mut entry = weapon(uuid, json!({"reason":"claimed"}));
+            entry["creator"] = json!({"name": "alice"});
+            entry["license"] = license;
+            entry
+        };
+        let entries = parse(json!([
+            licensed(
+                "11111111-2222-4333-8444-555555555555",
+                json!({"text":"CC-BY-4.0","attribution":" Model by Alice Example "})
+            ),
+            licensed(
+                "22222222-2222-4333-8444-555555555555",
+                json!({"text":"CC0-1.0","attribution":"  "})
+            ),
+            licensed(
+                "33333333-2222-4333-8444-555555555555",
+                json!({"text":"CC0-1.0"})
+            ),
+            licensed("44444444-2222-4333-8444-555555555555", json!(null)),
+        ]));
+        let owned = library_templates(&entries, AssetKind::Weapon, &selector);
+        assert_eq!(
+            owned,
+            templates(&catalogue(&entries), AssetKind::Weapon, &selector)
+        );
+        let credits: Vec<_> = owned
+            .iter()
+            .map(|item| {
+                (
+                    item.author.as_deref(),
+                    item.license.as_deref(),
+                    item.attribution.as_deref(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            credits,
+            [
+                (
+                    Some("alice"),
+                    Some("CC-BY-4.0"),
+                    Some("Model by Alice Example")
+                ),
+                (Some("alice"), Some("CC0-1.0"), None),
+                (Some("alice"), Some("CC0-1.0"), None),
+                (Some("alice"), None, None),
+            ]
+        );
+        // Store metadata round-trips it; files from older SDKs lack the key.
+        let text = serde_json::to_string(&owned[0]).unwrap();
+        assert_eq!(serde_json::from_str::<StoreAsset>(&text).unwrap(), owned[0]);
+        let older = text.replace(r#""attribution":"Model by Alice Example","#, "");
+        assert_ne!(older, text);
+        let older: StoreAsset = serde_json::from_str(&older).unwrap();
+        assert_eq!(older.attribution, None);
+        assert!(validate_item(&older, AssetKind::Weapon, &selector).is_ok());
+        assert!(
+            !serde_json::to_string(&owned[1])
+                .unwrap()
+                .contains("attribution")
+        );
     }
 }
