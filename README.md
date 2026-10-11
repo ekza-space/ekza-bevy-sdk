@@ -227,8 +227,18 @@ No cached display name is trusted as an identity.
 Use `refresh_checked()` periodically. `AccountError::Unauthorized` means the
 connection expired or was revoked: clear the session and its file. Preserve the
 credential on `Unavailable` and retry. `InvalidCredential` prevents using a saved
-connection against a different server or project. Logout removes the file;
-Studio Account can revoke a connection server-side.
+connection against a different server or project.
+
+To sign out, remove the file, then call `session.disconnect()`. It asks the
+Registry to end that one link (`DELETE /v1/account/session`, the link's own
+bearer token) on a background thread and returns at once. It never fails, so
+signing out also works offline; the link then stays valid until it expires or
+the player revokes it in Studio Account. Other connections of the account are
+untouched. To end a saved connection that was never restored, use
+`AccountClient::disconnect(credential)`. `revoke()` is the blocking form (at most
+`REVOKE_TIMEOUT`, 5 s). It returns `Ok` also for an already ended link.
+Registries older than this endpoint answer `404`/`405`, which maps to
+`Unavailable`.
 
 New Registry connections last up to 90 days. Existing connections keep their
 original expiration. Tokens are opaque, project-scoped credentials, not wallet

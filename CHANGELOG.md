@@ -15,6 +15,15 @@
   `StoreAsset`, `AccountCredential` and every persisted format are unchanged.
 - `account_pair` prints library assets and installable weapons for an optional
   weapon profile argument.
+- Sign-out ends the link on the Registry: `AccountSession::disconnect(self)` and
+  `AccountClient::disconnect(credential)` send `DELETE /v1/account/session` with
+  that link's token from a background thread. They return at once and never fail,
+  so an offline sign-out still completes locally. The blocking forms
+  `AccountSession::revoke()` and `AccountClient::revoke(&credential)` are bounded
+  by `REVOKE_TIMEOUT` (5 s). `2xx` is `Ok`, `401`/`403` is `Unauthorized`, and
+  anything else, including `404`/`405` from registries without the endpoint, is
+  `Unavailable`. A credential for another registry or game is refused before its
+  token is sent.
 
 ## 0.9.0
 
