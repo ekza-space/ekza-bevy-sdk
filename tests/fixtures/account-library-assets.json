@@ -95,6 +95,49 @@
       "assetKind": "weapon",
       "name": "Wildspark set",
       "description": "Wildspark set for OMOBA",
+      "thumbnailUrl": "https://registry.ekza.io/v1/studio/assets/3efc12876c2c73093dba759f64420812823bf557820946ec2cbbbd2251ab9c02/rendition-thumbnail",
+      "license": {
+        "text": "CC-BY-4.0",
+        "attribution": "wildspark-maker"
+      },
+      "creator": {
+        "name": "wildspark-maker"
+      },
+      "origin": {
+        "kind": "studio",
+        "revisionId": "9d2f4a8e-0000-4000-8000-555555555556"
+      },
+      "access": "free",
+      "renditions": [
+        {
+          "platform": "android",
+          "profile": "handheld-glb-v1",
+          "profileVersion": "1",
+          "format": "glb",
+          "mediaType": "model/gltf-binary",
+          "sha256": "b83c93b2630659592e934aa25558100d6503c9ef024d404beccb4a5a7558e4d3",
+          "sizeBytes": 598112,
+          "downloadUrl": "https://registry.ekza.io/v1/studio/assets/b83c93b2630659592e934aa25558100d6503c9ef024d404beccb4a5a7558e4d3/rendition"
+        }
+      ],
+      "projectSupport": [
+        {
+          "projectId": "omoba",
+          "platform": "android",
+          "profile": "handheld-glb-v1",
+          "status": "approved",
+          "requirementId": null
+        }
+      ],
+      "library": {
+        "reason": "claimed"
+      }
+    },
+    {
+      "id": "ekza:weapon:11111111-2222-4333-8444-555555555555",
+      "assetKind": "weapon",
+      "name": "Wildspark set",
+      "description": "Wildspark set for OMOBA",
       "thumbnailUrl": "https://registry.ekza.io/v1/studio/assets/2f7c7074f869ce123a7ef725f803ccc4eb2d644c3a38227e66aeff909a3cf8a7/rendition-thumbnail",
       "license": {
         "text": "CC-BY-4.0",
@@ -594,49 +637,6 @@
     },
     42,
     null,
-    "ekza:weapon:11111111-2222-4333-8444-555555555555",
-    {
-      "id": "ekza:weapon:11111111-2222-4333-8444-555555555555",
-      "assetKind": "weapon",
-      "name": "Wildspark set (duplicate)",
-      "description": "Wildspark set for OMOBA",
-      "thumbnailUrl": "https://registry.ekza.io/v1/studio/assets/2f7c7074f869ce123a7ef725f803ccc4eb2d644c3a38227e66aeff909a3cf8a7/rendition-thumbnail",
-      "license": {
-        "text": "CC-BY-4.0",
-        "attribution": "wildspark-maker"
-      },
-      "creator": {
-        "name": "wildspark-maker"
-      },
-      "origin": {
-        "kind": "studio",
-        "revisionId": "9d2f4a8e-0000-4000-8000-555555555555"
-      },
-      "access": "free",
-      "renditions": [
-        {
-          "platform": "desktop",
-          "profile": "handheld-glb-v1",
-          "profileVersion": "1",
-          "format": "glb",
-          "mediaType": "model/gltf-binary",
-          "sha256": "0d5bea83abf3bdad4f16e0031b24978f8f27b612c2c046d75b4764d8fa1a29f4",
-          "sizeBytes": 612344,
-          "downloadUrl": "https://registry.ekza.io/v1/studio/assets/0d5bea83abf3bdad4f16e0031b24978f8f27b612c2c046d75b4764d8fa1a29f4/rendition"
-        }
-      ],
-      "projectSupport": [
-        {
-          "projectId": "omoba",
-          "platform": "desktop",
-          "profile": "handheld-glb-v1",
-          "status": "approved",
-          "requirementId": "wildspark.handheld.set"
-        }
-      ],
-      "library": {
-        "reason": "claimed"
-      }
-    }
+    "ekza:weapon:11111111-2222-4333-8444-555555555555"
   ]
 }

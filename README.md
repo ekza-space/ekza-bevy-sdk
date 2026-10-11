@@ -309,6 +309,9 @@ approved, unambiguous GLB renditions with a canonical identity of that kind.
 approval or access. Entries are parsed one at a time: unknown kinds, malformed
 items and identities that do not match their kind are skipped without failing
 the session, and a missing, null or non-array `assets` means an empty library.
+Like `/v2/assets`, the library lists one entry per visible revision, so an id
+can repeat when games pin different revisions; every entry is kept and
+`assets()` picks the revision approved for the selector, deduplicated by slug.
 An outage keeps the last library; a successful refresh replaces it. Avatars
 stay in `items`, and a weapon never appears there. Nothing new is persisted:
 saved credentials keep their format and restore reads the live library.

@@ -115,8 +115,10 @@ fn library_assets_list_every_kind_and_filter_by_the_store_selector() {
         .unwrap();
     assert_eq!(session.username, "Spark tester");
 
-    // Malformed, unknown-kind, kind/identity-mismatched and repeated entries
-    // are skipped one by one; every well-formed entry survives in wire order.
+    // Malformed, unknown-kind and kind/identity-mismatched entries are skipped
+    // one by one; every well-formed entry survives in wire order. The library
+    // lists one entry per revision: a newer android revision of the Wildspark
+    // set comes ahead of the desktop one and both are kept.
     let listed: Vec<_> = session
         .library_assets()
         .iter()
@@ -126,6 +128,7 @@ fn library_assets_list_every_kind_and_filter_by_the_store_selector() {
         listed,
         [
             (AVATAR, Some(LibraryReason::Created)),
+            (WILDSPARK, Some(LibraryReason::Claimed)),
             (WILDSPARK, Some(LibraryReason::Claimed)),
             (HAMMER, Some(LibraryReason::Saved)),
             (
@@ -149,6 +152,10 @@ fn library_assets_list_every_kind_and_filter_by_the_store_selector() {
         ]
     );
     assert_eq!(session.library_assets()[1].asset.name, "Wildspark set");
+    assert_ne!(
+        session.library_assets()[1].asset.renditions,
+        session.library_assets()[2].asset.renditions
+    );
 
     // Weapons: free, approved for exactly this project/platform/profile and
     // unambiguous. Pending, non-free, ambiguous and other-game items are not.
@@ -165,18 +172,24 @@ fn library_assets_list_every_kind_and_filter_by_the_store_selector() {
         );
         assert!(validate_item(item, AssetKind::Weapon, &weapons()).is_ok());
     }
-    // The same StoreAsset the public weapon catalogue would produce.
-    let fixture: Value = serde_json::from_str(LIBRARY_FIXTURE).unwrap();
-    let public: Vec<CatalogAsset> = fixture["assets"].as_array().unwrap()[1..3]
-        .iter()
-        .map(|item| serde_json::from_value(item.clone()).unwrap())
-        .collect();
-    assert_eq!(owned, templates(&public, AssetKind::Weapon, &weapons()));
+    // Desktop gets the revision it pins, not the newer android one listed first.
+    assert_eq!(
+        owned[0].support.rendition.sha256,
+        "0d5bea83abf3bdad4f16e0031b24978f8f27b612c2c046d75b4764d8fa1a29f4"
+    );
 
     let phone = SupportSelector::new("omoba", "android", "handheld-glb-v1", &["glb"]);
+    let on_phone = session.assets(AssetKind::Weapon, &phone);
     assert_eq!(
-        ids(&session.assets(AssetKind::Weapon, &phone)),
-        ["ekza:weapon:66666666-0000-4000-8000-000000000006"]
+        ids(&on_phone),
+        [
+            WILDSPARK,
+            "ekza:weapon:66666666-0000-4000-8000-000000000006"
+        ]
+    );
+    assert_eq!(
+        on_phone[0].support.rendition.sha256,
+        "b83c93b2630659592e934aa25558100d6503c9ef024d404beccb4a5a7558e4d3"
     );
     let other_game = SupportSelector::new("ekza-space", "desktop", "handheld-glb-v1", &["glb"]);
     assert_eq!(
@@ -189,6 +202,25 @@ fn library_assets_list_every_kind_and_filter_by_the_store_selector() {
     );
     assert!(session.assets(AssetKind::Weapon, &selector()).is_empty());
     assert!(session.assets(AssetKind::Avatar, &weapons()).is_empty());
+
+    // The same StoreAssets the public catalogue would produce over the same
+    // items, for every kind and selector.
+    let fixture: Value = serde_json::from_str(LIBRARY_FIXTURE).unwrap();
+    let public: Vec<CatalogAsset> = fixture["assets"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|item| serde_json::from_value(item.clone()).ok())
+        .collect();
+    for kind in [AssetKind::Weapon, AssetKind::Avatar] {
+        for store in [&weapons(), &phone, &other_game, &selector()] {
+            assert_eq!(
+                session.assets(kind, store),
+                templates(&public, kind, store),
+                "{kind:?} {store:?}"
+            );
+        }
+    }
 
     // Avatars keep their own list; a weapon never lands in `items`.
     assert_eq!(session.items.len(), 1);

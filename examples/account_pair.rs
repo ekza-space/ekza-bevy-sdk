@@ -78,7 +78,7 @@ fn main() -> Result<(), String> {
         );
     }
     println!(
-        "library {} asset(s), {} installable weapon(s) for {weapon_profile}",
+        "library {} asset entries (one per revision), {} installable weapon(s) for {weapon_profile}",
         session.library_assets().len(),
         session.assets(AssetKind::Weapon, &weapons).len()
     );

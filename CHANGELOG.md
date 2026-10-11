@@ -6,6 +6,8 @@
   item shape, optional `library.reason`). Entries are parsed one at a time:
   unknown kinds, malformed items and kind/identity mismatches are skipped and
   never drop the session. Older registries without the field still connect.
+  Every listed revision is kept, so an id pinned at different revisions per
+  platform yields the same items as `templates()` over the same entries.
 - Add `AccountSession::assets(kind, &selector)`, returning the same
   `assets::StoreAsset` as the typed public catalogue, plus `has_asset(id)` and
   `library_assets()`. New `assets::{LibraryAsset, LibraryReason,

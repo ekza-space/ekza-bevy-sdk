@@ -363,6 +363,7 @@ impl AccountSession {
     }
 
     /// Every well-formed library entry from the last successful refresh, any kind.
+    /// One entry per listed revision, so an id can appear more than once.
     pub fn library_assets(&self) -> &[LibraryAsset] {
         &self.assets
     }

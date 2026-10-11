@@ -190,7 +190,9 @@ impl LibraryAsset {
 /// `#[serde(deserialize_with)]` helper for an account library's additive
 /// `assets` array. Entries are parsed one at a time: a bad entry is skipped,
 /// never the document. A null or non-array value means no assets. Wire order
-/// is kept and a repeated id keeps its first entry.
+/// is kept. Like `/v2/assets`, the library lists one entry per visible
+/// revision, so an id can repeat with other approvals and renditions; every
+/// entry is kept and selection dedupes by slug, as [`templates`] does.
 pub fn deserialize_library_assets<'de, D>(deserializer: D) -> Result<Vec<LibraryAsset>, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -198,12 +200,7 @@ where
     let serde_json::Value::Array(entries) = serde_json::Value::deserialize(deserializer)? else {
         return Ok(Vec::new());
     };
-    let mut seen = std::collections::HashSet::new();
-    Ok(entries
-        .iter()
-        .filter_map(LibraryAsset::parse)
-        .filter(|entry| seen.insert(entry.asset.id.clone()))
-        .collect())
+    Ok(entries.iter().filter_map(LibraryAsset::parse).collect())
 }
 
 /// [`templates`] over library entries: the same free, exact-approval and
@@ -504,6 +501,12 @@ mod tests {
         assets: Vec<LibraryAsset>,
     }
 
+    fn parse(assets: serde_json::Value) -> Vec<LibraryAsset> {
+        serde_json::from_value::<Library>(json!({ "assets": assets }))
+            .unwrap()
+            .assets
+    }
+
     fn weapon(uuid: &str, library: serde_json::Value) -> serde_json::Value {
         json!({
             "assetKind":"weapon", "id":format!("ekza:weapon:{uuid}"), "name":"Wildspark set",
@@ -516,20 +519,19 @@ mod tests {
         })
     }
 
+    fn catalogue(entries: &[LibraryAsset]) -> Vec<CatalogAsset> {
+        entries.iter().map(|entry| entry.asset.clone()).collect()
+    }
+
     #[test]
     fn library_assets_parse_one_entry_at_a_time() {
         let first = "11111111-2222-4333-8444-555555555555";
         let second = "22222222-2222-4333-8444-555555555555";
-        let parse = |assets: serde_json::Value| {
-            serde_json::from_value::<Library>(json!({ "assets": assets }))
-                .unwrap()
-                .assets
-        };
         let entries = parse(json!([
             weapon(first, json!({"reason":"claimed"})),
             {"assetKind":"emote", "id":"ekza:emote:x", "name":"Dance"},
             {"assetKind":"weapon", "id":format!("ekza:avatar:{second}"), "name":"Mismatch"},
-            weapon(first, json!({"reason":"saved"})),
+            weapon(first, json!({"reason":"claimed"})),
             weapon(second, json!("claimed")),
             7,
         ]));
@@ -537,13 +539,13 @@ mod tests {
             .iter()
             .map(|entry| (entry.asset.id.as_str(), entry.reason))
             .collect();
+        let first_id = "ekza:weapon:11111111-2222-4333-8444-555555555555";
+        // A repeated id is kept; selection below dedupes it by slug.
         assert_eq!(
             parsed,
             [
-                (
-                    "ekza:weapon:11111111-2222-4333-8444-555555555555",
-                    Some(LibraryReason::Claimed)
-                ),
+                (first_id, Some(LibraryReason::Claimed)),
+                (first_id, Some(LibraryReason::Claimed)),
                 ("ekza:weapon:22222222-2222-4333-8444-555555555555", None),
             ]
         );
@@ -558,10 +560,44 @@ mod tests {
         );
 
         let selector = SupportSelector::new("omoba", "desktop", "handheld-glb-v1", &["glb"]);
-        let catalogue: Vec<_> = entries.iter().map(|entry| entry.asset.clone()).collect();
         let owned = library_templates(&entries, AssetKind::Weapon, &selector);
         assert_eq!(owned.len(), 2);
-        assert_eq!(owned, templates(&catalogue, AssetKind::Weapon, &selector));
+        assert_eq!(
+            owned,
+            templates(&catalogue(&entries), AssetKind::Weapon, &selector)
+        );
         assert!(library_templates(&entries, AssetKind::Avatar, &selector).is_empty());
+    }
+
+    #[test]
+    fn every_listed_revision_of_one_asset_is_kept() {
+        // A newer revision approved for android, listed ahead of the revision
+        // desktop still pins: each platform must find its own.
+        let uuid = "11111111-2222-4333-8444-555555555555";
+        let revision = |platform: &str, sha: &str| {
+            let mut entry = weapon(uuid, json!({"reason":"claimed"}));
+            entry["projectSupport"][0]["platform"] = json!(platform);
+            entry["renditions"][0]["platform"] = json!(platform);
+            entry["renditions"][0]["sha256"] = json!(sha.repeat(32));
+            entry
+        };
+        let entries = parse(json!([
+            revision("android", "cd"),
+            revision("desktop", "ab")
+        ]));
+        assert_eq!(entries.len(), 2);
+        let catalogue = catalogue(&entries);
+        for (platform, sha) in [("desktop", "ab"), ("android", "cd")] {
+            let selector = SupportSelector::new("omoba", platform, "handheld-glb-v1", &["glb"]);
+            let owned = library_templates(&entries, AssetKind::Weapon, &selector);
+            assert_eq!(owned, templates(&catalogue, AssetKind::Weapon, &selector));
+            assert_eq!(owned.len(), 1, "{platform}");
+            assert_eq!(owned[0].support.platform, platform);
+            assert_eq!(owned[0].support.rendition.sha256, sha.repeat(32));
+            assert_eq!(
+                owned[0].slug,
+                asset_slug(AssetKind::Weapon, &owned[0].asset_id, &sha.repeat(32))
+            );
+        }
     }
 }
