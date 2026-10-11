@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased — 2026-10-11 account library assets
+
+- Read the account library's additive `assets` array (every kind, `/v2/assets`
+  item shape, optional `library.reason`). Entries are parsed one at a time:
+  unknown kinds, malformed items and kind/identity mismatches are skipped and
+  never drop the session. Older registries without the field still connect.
+- Add `AccountSession::assets(kind, &selector)`, returning the same
+  `assets::StoreAsset` as the typed public catalogue, plus `has_asset(id)` and
+  `library_assets()`. New `assets::{LibraryAsset, LibraryReason,
+  library_templates, deserialize_library_assets}`. Avatar `items`, `has(slug)`,
+  `StoreAsset`, `AccountCredential` and every persisted format are unchanged.
+- `account_pair` prints library assets and installable weapons for an optional
+  weapon profile argument.
+
 ## 0.9.0
 
 - Upgrade the optional Bevy integration to Bevy 0.19.1 and Rust 1.95.0. Model handles use `WorldAsset`; GLB scene labels remain unchanged.

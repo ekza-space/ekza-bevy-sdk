@@ -2,9 +2,11 @@
 //!
 //! The game asks the registry for a short code and shows it with a link. The player
 //! opens the link, signs in to Ekza Studio and confirms. The game then holds a token
-//! that can read one thing: which avatars in that account's library are approved for
-//! this game. Items arrive in the unified catalogue shape, so they become
-//! [`StoreAvatar`]s exactly like the rest of the store.
+//! that can read one thing: which assets in that account's library are approved for
+//! this game. Avatars arrive in the unified catalogue shape, so they become
+//! [`StoreAvatar`]s exactly like the rest of the store. Assets of every kind
+//! (weapons included) become [`StoreAsset`]s through
+//! [`AccountSession::assets`], with the same checks as the typed public catalogue.
 //!
 //! ```no_run
 //! # use ekza_bevy_sdk::{account::{AccountClient, AccountFlow}, passport::{SupportSelector, pairing::PairingState}};
@@ -13,7 +15,9 @@
 //! // every frame:
 //! match flow.state() {
 //!     PairingState::AwaitingApproval { user_code, verification_url, .. } => { /* show both */ }
-//!     PairingState::Connected => { let session = flow.take_session(); /* session.items */ }
+//!     PairingState::Connected => {
+//!         let session = flow.take_session(); /* session.items, session.assets(kind, &selector) */
+//!     }
 //!     PairingState::Failed(reason) => { /* show, offer retry */ }
 //!     PairingState::Starting | PairingState::Cancelled => {}
 //! }
@@ -38,6 +42,7 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::{Value, json};
 
 use crate::{
+    assets::{AssetKind, LibraryAsset, StoreAsset, deserialize_library_assets, library_templates},
     catalog::CatalogV2Avatar,
     passport::{SupportSelector, client::safe_url, pairing::PairingState},
     store::{StoreAvatar, templates_v2},
@@ -135,6 +140,9 @@ struct LibraryResponse {
     account: AccountInfo,
     #[serde(default)]
     items: Vec<CatalogV2Avatar>,
+    /// Additive: every kind in `/v2/assets` shape. Older registries omit it.
+    #[serde(default, deserialize_with = "deserialize_library_assets")]
+    assets: Vec<LibraryAsset>,
 }
 
 /// A connected account. The bearer token is private.
@@ -146,6 +154,7 @@ pub struct AccountSession {
     pub username: String,
     /// Library avatars approved for this game, as store items (slug, boundary, `free`).
     pub items: Vec<StoreAvatar>,
+    assets: Vec<LibraryAsset>,
 }
 
 /// True for the eight-character code alphabet the registry issues.
@@ -195,6 +204,7 @@ impl AccountClient {
             selector: selector.clone(),
             username: String::new(),
             items: Vec::new(),
+            assets: Vec::new(),
         };
         session.refresh_checked()?;
         Ok(session)
@@ -297,6 +307,7 @@ impl AccountClient {
             selector: selector.clone(),
             username: String::new(),
             items: Vec::new(),
+            assets: Vec::new(),
         };
         session.refresh()?;
         Ok(session)
@@ -319,6 +330,7 @@ impl AccountSession {
         self.username = library.account.username;
         // The same validation as the public store: identity, exact selector, hash, size.
         self.items = templates_v2(&library.items, &self.selector);
+        self.assets = library.assets;
         Ok(())
     }
 
@@ -333,6 +345,26 @@ impl AccountSession {
 
     pub fn has(&self, slug: &str) -> bool {
         self.items.iter().any(|item| item.slug == slug)
+    }
+
+    /// Library assets of `kind` that are free and approved for exactly
+    /// `selector`, e.g. the selector of the game's weapon `AssetStore`. Items
+    /// match that store's `refresh` output, so `AssetStore::install` accepts them.
+    /// Recomputed from the last successful refresh on every call.
+    pub fn assets(&self, kind: AssetKind, selector: &SupportSelector) -> Vec<StoreAsset> {
+        library_templates(&self.assets, kind, selector)
+    }
+
+    /// True when the library lists this canonical id (`ekza:weapon:<uuid>`,
+    /// `ekza:avatar:<uuid>`, ...), whatever its approval or access. Use
+    /// [`Self::assets`] for what the game may install.
+    pub fn has_asset(&self, id: &str) -> bool {
+        self.assets.iter().any(|entry| entry.asset.id == id)
+    }
+
+    /// Every well-formed library entry from the last successful refresh, any kind.
+    pub fn library_assets(&self) -> &[LibraryAsset] {
+        &self.assets
     }
 }
 
@@ -494,6 +526,20 @@ mod tests {
         assert_eq!(
             (library.schema.as_str(), library.items.len()),
             (LIBRARY_SCHEMA, 0)
+        );
+        assert!(library.assets.is_empty());
+        // The additive array is tolerant per entry and never invalidates the document.
+        let library: LibraryResponse = serde_json::from_str(
+            r#"{"schema":"ekza.account.library.v1","projectId":"omoba","items":[],
+                "assets":[{"assetKind":"emote","id":"ekza:emote:1","name":"Dance"},
+                          {"assetKind":"weapon","id":"ekza:weapon:11111111-2222-4333-8444-555555555555",
+                           "name":"Wildspark set","library":{"reason":"claimed"}}]}"#,
+        )
+        .unwrap();
+        assert_eq!(library.assets.len(), 1);
+        assert_eq!(
+            library.assets[0].reason,
+            Some(crate::assets::LibraryReason::Claimed)
         );
     }
 }

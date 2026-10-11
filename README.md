@@ -283,6 +283,39 @@ eligibility: having cached bytes, or passing `install` an older approved item,
 does not prove a release is still available. The SDK does not accept gameplay
 packets or decide server refresh/revocation policy.
 
+### Assets in a connected account library
+
+`GET /v1/account/library` keeps its avatar `items` and may add an `assets`
+array of `/v2/assets` items of any kind, each optionally carrying
+`library.reason` (`created`, `saved` or `claimed`). `AccountSession` reads it on
+every successful refresh:
+
+```rust,no_run
+use ekza_bevy_sdk::{account::AccountSession, assets::{AssetKind, AssetStore}};
+# fn example(session: &AccountSession, weapons: &AssetStore) {
+// The weapon store's own selector, e.g. omoba / desktop / handheld-glb-v1.
+for item in session.assets(AssetKind::Weapon, weapons.selector()) {
+    // The same StoreAsset (slug, approval, rendition) as `weapons.refresh()`;
+    // `weapons.install(&item, validator)` accepts it.
+}
+let claimed = session.has_asset("ekza:weapon:11111111-2222-4333-8444-555555555555");
+for entry in session.library_assets() { /* entry.asset, entry.reason */ }
+# }
+```
+
+`assets(kind, selector)` applies `assets::templates`: explicitly free, exactly
+approved, unambiguous GLB renditions with a canonical identity of that kind.
+`has_asset(id)` answers library membership for a canonical id whatever its
+approval or access. Entries are parsed one at a time: unknown kinds, malformed
+items and identities that do not match their kind are skipped without failing
+the session, and a missing, null or non-array `assets` means an empty library.
+An outage keeps the last library; a successful refresh replaces it. Avatars
+stay in `items`, and a weapon never appears there. Nothing new is persisted:
+saved credentials keep their format and restore reads the live library.
+
+Library membership is a wardrobe filter, not an entitlement. A game server
+still admits free assets from its own registry read.
+
 ## License
 
 Licensed under either of
