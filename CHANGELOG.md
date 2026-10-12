@@ -1,5 +1,41 @@
 # Changelog
 
+## Unreleased — 2026-10-11 account library assets
+
+- Read the account library's additive `assets` array (every kind, `/v2/assets`
+  item shape, optional `library.reason`). Entries are parsed one at a time:
+  unknown kinds, malformed items and kind/identity mismatches are skipped and
+  never drop the session. Older registries without the field still connect.
+  Every listed revision is kept, so an id pinned at different revisions per
+  platform yields the same items as `templates()` over the same entries.
+- Add `AccountSession::assets(kind, &selector)`, returning the same
+  `assets::StoreAsset` as the typed public catalogue, plus `has_asset(id)` and
+  `library_assets()`. New `assets::{LibraryAsset, LibraryReason,
+  library_templates, deserialize_library_assets}`. Avatar `items`, `has(slug)`,
+  `StoreAsset`, `AccountCredential` and every persisted format are unchanged.
+- `account_pair` prints library assets and installable weapons for an optional
+  weapon profile argument.
+- Sign-out ends the link on the Registry: `AccountSession::disconnect(self)` and
+  `AccountClient::disconnect(credential)` send `DELETE /v1/account/session` with
+  that link's token from a background thread. They return at once and never fail,
+  so an offline sign-out still completes locally. The blocking forms
+  `AccountSession::revoke()` and `AccountClient::revoke(&credential)` are bounded
+  by `REVOKE_TIMEOUT` (5 s). `2xx` is `Ok`, `401`/`403` is `Unauthorized`, and
+  anything else, including `404`/`405` from registries without the endpoint, is
+  `Unavailable`. A credential for another registry or game is refused before its
+  token is sent.
+- `AccountSession::has_asset` also accepts a bare Studio asset UUID (any letter
+  case), matched against the `<uuid>` of `ekza:<kind>:<uuid>` ids of any kind,
+  the same two forms the Registry claim route takes. Canonical ids still match
+  exactly; a bare UUID used to return `false`.
+- Keep the licence's credit line: `StoreAsset::attribution` and
+  `StoreAvatar::attribution` (`license.attribution` from `/v2/assets`,
+  `/v2/avatars` and the account library; `None` when blank or from the legacy
+  `/v1/avatars` feed, which folds it into `author`). Plus
+  `CatalogV2License::credit()`. Optional and skipped when `None`, so persisted
+  store files stay compatible in both directions. Code that builds these
+  structs with a literal must add `attribution: None`.
+
 ## 0.9.0
 
 - Upgrade the optional Bevy integration to Bevy 0.19.1 and Rust 1.95.0. Model handles use `WorldAsset`; GLB scene labels remain unchanged.

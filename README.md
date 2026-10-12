@@ -227,8 +227,18 @@ No cached display name is trusted as an identity.
 Use `refresh_checked()` periodically. `AccountError::Unauthorized` means the
 connection expired or was revoked: clear the session and its file. Preserve the
 credential on `Unavailable` and retry. `InvalidCredential` prevents using a saved
-connection against a different server or project. Logout removes the file;
-Studio Account can revoke a connection server-side.
+connection against a different server or project.
+
+To sign out, remove the file, then call `session.disconnect()`. It asks the
+Registry to end that one link (`DELETE /v1/account/session`, the link's own
+bearer token) on a background thread and returns at once. It never fails, so
+signing out also works offline; the link then stays valid until it expires or
+the player revokes it in Studio Account. Other connections of the account are
+untouched. To end a saved connection that was never restored, use
+`AccountClient::disconnect(credential)`. `revoke()` is the blocking form (at most
+`REVOKE_TIMEOUT`, 5 s). It returns `Ok` also for an already ended link.
+Registries older than this endpoint answer `404`/`405`, which maps to
+`Unavailable`.
 
 New Registry connections last up to 90 days. Existing connections keep their
 original expiration. Tokens are opaque, project-scoped credentials, not wallet
@@ -282,6 +292,58 @@ validator. A server must independently read approvals and check current selectio
 eligibility: having cached bytes, or passing `install` an older approved item,
 does not prove a release is still available. The SDK does not accept gameplay
 packets or decide server refresh/revocation policy.
+
+### Assets in a connected account library
+
+`GET /v1/account/library` keeps its avatar `items` and may add an `assets`
+array of `/v2/assets` items of any kind, each optionally carrying
+`library.reason` (`created`, `saved` or `claimed`). `AccountSession` reads it on
+every successful refresh:
+
+```rust,no_run
+use ekza_bevy_sdk::{account::AccountSession, assets::{AssetKind, AssetStore}};
+# fn example(session: &AccountSession, weapons: &AssetStore) {
+// The weapon store's own selector, e.g. omoba / desktop / handheld-glb-v1.
+for item in session.assets(AssetKind::Weapon, weapons.selector()) {
+    // The same StoreAsset (slug, approval, rendition) as `weapons.refresh()`;
+    // `weapons.install(&item, validator)` accepts it.
+}
+let listed = session.has_asset("ekza:weapon:11111111-2222-4333-8444-555555555555");
+// The same answer for the bare Studio asset UUID, as the claim route accepts it.
+assert_eq!(listed, session.has_asset("11111111-2222-4333-8444-555555555555"));
+for entry in session.library_assets() { /* entry.asset, entry.reason */ }
+# }
+```
+
+`assets(kind, selector)` applies `assets::templates`: explicitly free, exactly
+approved, unambiguous GLB renditions with a canonical identity of that kind.
+`has_asset(id)` answers library membership whatever the approval or access. It
+takes a canonical id, matched exactly (`ekza:weapon:<uuid>`, `ekza:avatar:<uuid>`,
+`solana:devnet:avatar-data:<key>`), or a bare Studio asset UUID in any letter
+case, matched against the `<uuid>` of an `ekza:<kind>:<uuid>` id of any kind.
+Entries are parsed one at a time: unknown kinds, malformed
+items and identities that do not match their kind are skipped without failing
+the session, and a missing, null or non-array `assets` means an empty library.
+Like `/v2/assets`, the library lists one entry per visible revision, so an id
+can repeat when games pin different revisions; every entry is kept and
+`assets()` picks the revision approved for the selector, deduplicated by slug.
+An outage keeps the last library; a successful refresh replaces it. Avatars
+stay in `items`, and a weapon never appears there. Nothing new is persisted:
+saved credentials keep their format and restore reads the live library.
+
+Library membership is a wardrobe filter, not an entitlement. A game server
+still admits free assets from its own registry read.
+
+### Credits
+
+`StoreAsset` and `StoreAvatar` carry `author` (the creator), `license` (the
+licence text, e.g. `CC-BY-4.0`) and `attribution`: the licence's credit line
+(`license.attribution` in `/v2/assets`, `/v2/avatars` and the account library),
+trimmed, `None` when blank. CC-BY and similar licences require that line to be
+shown with the item, so display it whenever it is present. The legacy
+`/v1/avatars` feed already folds its attribution into `author`, and its items
+have no `attribution`. Store files written by older SDKs load with `None` until
+the next successful refresh.
 
 ## License
 

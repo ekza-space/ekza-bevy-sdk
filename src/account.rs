@@ -2,9 +2,11 @@
 //!
 //! The game asks the registry for a short code and shows it with a link. The player
 //! opens the link, signs in to Ekza Studio and confirms. The game then holds a token
-//! that can read one thing: which avatars in that account's library are approved for
-//! this game. Items arrive in the unified catalogue shape, so they become
-//! [`StoreAvatar`]s exactly like the rest of the store.
+//! that can read one thing: which assets in that account's library are approved for
+//! this game. Avatars arrive in the unified catalogue shape, so they become
+//! [`StoreAvatar`]s exactly like the rest of the store. Assets of every kind
+//! (weapons included) become [`StoreAsset`]s through
+//! [`AccountSession::assets`], with the same checks as the typed public catalogue.
 //!
 //! ```no_run
 //! # use ekza_bevy_sdk::{account::{AccountClient, AccountFlow}, passport::{SupportSelector, pairing::PairingState}};
@@ -13,7 +15,9 @@
 //! // every frame:
 //! match flow.state() {
 //!     PairingState::AwaitingApproval { user_code, verification_url, .. } => { /* show both */ }
-//!     PairingState::Connected => { let session = flow.take_session(); /* session.items */ }
+//!     PairingState::Connected => {
+//!         let session = flow.take_session(); /* session.items, session.assets(kind, &selector) */
+//!     }
 //!     PairingState::Failed(reason) => { /* show, offer retry */ }
 //!     PairingState::Starting | PairingState::Cancelled => {}
 //! }
@@ -23,6 +27,10 @@
 //! owner-only permissions; secrets never appear in URLs, logs or
 //! `Debug` output. The token is not an entitlement: a game server still decides
 //! admission from its own registry read (free avatars) or a passport ticket (owned).
+//!
+//! To sign out, delete the saved credential and call
+//! [`AccountSession::disconnect`]: the registry is asked to end that link in the
+//! background, so local sign-out never waits for the network or fails offline.
 
 use std::{
     io::Read,
@@ -38,6 +46,10 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::{Value, json};
 
 use crate::{
+    assets::{
+        AssetKind, CatalogAsset, LibraryAsset, StoreAsset, deserialize_library_assets,
+        library_templates,
+    },
     catalog::CatalogV2Avatar,
     passport::{SupportSelector, client::safe_url, pairing::PairingState},
     store::{StoreAvatar, templates_v2},
@@ -82,6 +94,8 @@ pub const LIBRARY_SCHEMA: &str = "ekza.account.library.v1";
 const MAX_JSON_BYTES: u64 = 8 * 1024 * 1024;
 const PAIRING_TIMEOUT: Duration = Duration::from_secs(600);
 const CANCEL_SLICE: Duration = Duration::from_millis(100);
+/// Upper bound of one [`AccountClient::revoke`], connection included.
+pub const REVOKE_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Clone)]
 pub struct AccountClient {
@@ -135,6 +149,9 @@ struct LibraryResponse {
     account: AccountInfo,
     #[serde(default)]
     items: Vec<CatalogV2Avatar>,
+    /// Additive: every kind in `/v2/assets` shape. Older registries omit it.
+    #[serde(default, deserialize_with = "deserialize_library_assets")]
+    assets: Vec<LibraryAsset>,
 }
 
 /// A connected account. The bearer token is private.
@@ -146,6 +163,7 @@ pub struct AccountSession {
     pub username: String,
     /// Library avatars approved for this game, as store items (slug, boundary, `free`).
     pub items: Vec<StoreAvatar>,
+    assets: Vec<LibraryAsset>,
 }
 
 /// True for the eight-character code alphabet the registry issues.
@@ -182,19 +200,14 @@ impl AccountClient {
         credential: &AccountCredential,
         selector: &SupportSelector,
     ) -> Result<AccountSession, AccountError> {
-        if credential.base != self.base.as_str().trim_end_matches('/')
-            || credential.project_id != self.project_id
-            || credential.token.is_empty()
-            || credential.token.len() > 256
-        {
-            return Err(AccountError::InvalidCredential);
-        }
+        self.check(credential)?;
         let mut session = AccountSession {
             api: self.clone(),
             token: credential.token.clone(),
             selector: selector.clone(),
             username: String::new(),
             items: Vec::new(),
+            assets: Vec::new(),
         };
         session.refresh_checked()?;
         Ok(session)
@@ -202,6 +215,69 @@ impl AccountClient {
 
     pub fn project_id(&self) -> &str {
         &self.project_id
+    }
+
+    /// End the connection behind a saved credential on the registry
+    /// (`DELETE /v1/account/session`). Only that token's link is revoked, never
+    /// the account's other connections. `Ok` also when it was already revoked
+    /// or expired. A credential for another registry or game is refused before
+    /// its token is sent. Blocking, at most [`REVOKE_TIMEOUT`]; a game loop
+    /// should call [`Self::disconnect`] instead.
+    pub fn revoke(&self, credential: &AccountCredential) -> Result<(), AccountError> {
+        self.check(credential)?;
+        self.revoke_token(&credential.token, REVOKE_TIMEOUT)
+    }
+
+    /// [`Self::revoke`] on a background thread, best-effort. Returns at once
+    /// and never fails, so signing out works offline too; the link then stays
+    /// valid until it expires or the player revokes it in Studio Account.
+    /// Delete the saved credential file yourself; this does not touch disk.
+    pub fn disconnect(&self, credential: AccountCredential) {
+        let api = self.clone();
+        // If no thread can be started, the link simply expires on its own.
+        let _ = std::thread::Builder::new()
+            .name("ekza-account-disconnect".into())
+            .spawn(move || {
+                let _ = api.revoke(&credential);
+            });
+    }
+
+    fn check(&self, credential: &AccountCredential) -> Result<(), AccountError> {
+        if credential.base != self.base.as_str().trim_end_matches('/')
+            || credential.project_id != self.project_id
+            || credential.token.is_empty()
+            || credential.token.len() > 256
+        {
+            return Err(AccountError::InvalidCredential);
+        }
+        Ok(())
+    }
+
+    fn endpoint(&self, path: &str) -> String {
+        format!(
+            "{}/v1/account/{path}",
+            self.base.as_str().trim_end_matches('/')
+        )
+    }
+
+    fn revoke_token(&self, token: &str, timeout: Duration) -> Result<(), AccountError> {
+        let response = self
+            .client
+            .delete(self.endpoint("session"))
+            .bearer_auth(token)
+            .timeout(timeout)
+            .send()
+            .map_err(|_| "Ekza could not be reached. Retry.".to_string())?;
+        // The body is never needed: 204 has none and error text is not shown.
+        match response.status().as_u16() {
+            200..=299 => Ok(()),
+            401 | 403 => Err(AccountError::Unauthorized),
+            // Registries before link self-revoke answer 404 or 405.
+            404 | 405 => Err(
+                "This Ekza server cannot end the connection. Revoke it in Studio Account.".into(),
+            ),
+            status => Err(format!("Ekza request failed (HTTP {status}). Retry.").into()),
+        }
     }
 
     fn request<T: DeserializeOwned>(
@@ -220,10 +296,7 @@ impl AccountClient {
         token: Option<&str>,
         body: Option<Value>,
     ) -> Result<T, AccountError> {
-        let endpoint = format!(
-            "{}/v1/account/{path}",
-            self.base.as_str().trim_end_matches('/')
-        );
+        let endpoint = self.endpoint(path);
         let mut request = match body {
             Some(body) => self.client.post(endpoint).json(&body),
             None => self.client.get(endpoint),
@@ -297,6 +370,7 @@ impl AccountClient {
             selector: selector.clone(),
             username: String::new(),
             items: Vec::new(),
+            assets: Vec::new(),
         };
         session.refresh()?;
         Ok(session)
@@ -319,6 +393,7 @@ impl AccountSession {
         self.username = library.account.username;
         // The same validation as the public store: identity, exact selector, hash, size.
         self.items = templates_v2(&library.items, &self.selector);
+        self.assets = library.assets;
         Ok(())
     }
 
@@ -331,9 +406,63 @@ impl AccountSession {
         }
     }
 
+    /// [`AccountClient::revoke`] for this session's link. Blocking.
+    pub fn revoke(&self) -> Result<(), AccountError> {
+        self.api.revoke_token(&self.token, REVOKE_TIMEOUT)
+    }
+
+    /// Sign out: end this link on the registry in the background, best-effort
+    /// ([`AccountClient::disconnect`]). Returns at once and never fails, also
+    /// offline. Delete the saved credential first, then call this; a clone of
+    /// the session still held elsewhere gets `Unauthorized` once the revoke lands.
+    pub fn disconnect(self) {
+        self.api.disconnect(self.credential());
+    }
+
     pub fn has(&self, slug: &str) -> bool {
         self.items.iter().any(|item| item.slug == slug)
     }
+
+    /// Library assets of `kind` that are free and approved for exactly
+    /// `selector`, e.g. the selector of the game's weapon `AssetStore`. Items
+    /// match that store's `refresh` output, so `AssetStore::install` accepts them.
+    /// Recomputed from the last successful refresh on every call.
+    pub fn assets(&self, kind: AssetKind, selector: &SupportSelector) -> Vec<StoreAsset> {
+        library_templates(&self.assets, kind, selector)
+    }
+
+    /// True when the library lists this asset, whatever its approval or access.
+    /// `id` is either a canonical id (`ekza:weapon:<uuid>`, `ekza:avatar:<uuid>`,
+    /// `solana:devnet:avatar-data:<key>`), matched exactly, or a bare Studio
+    /// asset UUID in any letter case, matched against the `<uuid>` of an
+    /// `ekza:<kind>:<uuid>` id of any kind. These are the two forms the
+    /// registry's claim route accepts. Use [`Self::assets`] for what the game
+    /// may install.
+    pub fn has_asset(&self, id: &str) -> bool {
+        let uuid = id.to_ascii_lowercase();
+        if crate::passport::valid_uuid(&uuid) {
+            return self
+                .assets
+                .iter()
+                .any(|entry| studio_uuid(&entry.asset) == Some(uuid.as_str()));
+        }
+        self.assets.iter().any(|entry| entry.asset.id == id)
+    }
+
+    /// Every well-formed library entry from the last successful refresh, any kind.
+    /// One entry per listed revision, so an id can appear more than once.
+    pub fn library_assets(&self) -> &[LibraryAsset] {
+        &self.assets
+    }
+}
+
+/// The `<uuid>` of an `ekza:<kind>:<uuid>` id; `None` for on-chain identities.
+fn studio_uuid(asset: &CatalogAsset) -> Option<&str> {
+    asset
+        .id
+        .strip_prefix("ekza:")?
+        .strip_prefix(asset.asset_kind.as_str())?
+        .strip_prefix(':')
 }
 
 struct Shared {
@@ -466,6 +595,26 @@ mod tests {
     }
 
     #[test]
+    fn a_registry_that_never_answers_cannot_hold_a_revoke() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let (release, released) = std::sync::mpsc::channel::<()>();
+        let server = std::thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            let _ = socket.read(&mut [0; 4096]).unwrap();
+            // Hold the request open without answering.
+            let _ = released.recv_timeout(Duration::from_secs(10));
+        });
+        let api = AccountClient::new(&base, "omoba").unwrap();
+        let started = Instant::now();
+        let result = api.revoke_token("private-test-token", Duration::from_millis(300));
+        assert!(matches!(result, Err(AccountError::Unavailable(_))));
+        assert!(started.elapsed() < Duration::from_secs(3));
+        release.send(()).unwrap();
+        server.join().unwrap();
+    }
+
+    #[test]
     fn only_https_or_loopback_registries_are_accepted() {
         assert!(AccountClient::new("https://registry.ekza.io", "omoba").is_ok());
         assert!(AccountClient::new("http://127.0.0.1:8137", "omoba").is_ok());
@@ -494,6 +643,20 @@ mod tests {
         assert_eq!(
             (library.schema.as_str(), library.items.len()),
             (LIBRARY_SCHEMA, 0)
+        );
+        assert!(library.assets.is_empty());
+        // The additive array is tolerant per entry and never invalidates the document.
+        let library: LibraryResponse = serde_json::from_str(
+            r#"{"schema":"ekza.account.library.v1","projectId":"omoba","items":[],
+                "assets":[{"assetKind":"emote","id":"ekza:emote:1","name":"Dance"},
+                          {"assetKind":"weapon","id":"ekza:weapon:11111111-2222-4333-8444-555555555555",
+                           "name":"Wildspark set","library":{"reason":"claimed"}}]}"#,
+        )
+        .unwrap();
+        assert_eq!(library.assets.len(), 1);
+        assert_eq!(
+            library.assets[0].reason,
+            Some(crate::assets::LibraryReason::Claimed)
         );
     }
 }
