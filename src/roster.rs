@@ -509,6 +509,7 @@ mod tests {
         EkzaAvatar {
             origin: AvatarOrigin::Registry,
             id: "solana:devnet:avatar-data:3bfPehBVoBKXUUzmGGVT3tgQTYkpispqUKfPW1UktASL".into(),
+            base_model_id: None,
             name: "Robert".into(),
             collection: None,
             author: None,

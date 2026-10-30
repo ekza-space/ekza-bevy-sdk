@@ -17,11 +17,14 @@
 //! *wear* a template is decided by the passport session on the client and by a
 //! consumed ticket on the game server; the store only answers "what is this
 //! slug and where are its verified bytes".
+//!
+//! Catalogue metadata is isolated by Registry origin and consumer selector.
+//! Verified model bytes and canonical slugs are shared across those namespaces.
 
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    catalog::{AvatarOrigin, CatalogV2Avatar, EkzaAvatar},
+    catalog::{AvatarOrigin, CatalogV2Avatar, EkzaAvatar, validate_base_model_id},
     passport::{ProjectSupport, ProtectedAvatar, Rendition, SupportSelector, protected_slug},
 };
 
@@ -33,6 +36,10 @@ pub const STORE_SCHEMA: &str = "ekza.store.v1";
 pub struct StoreAvatar {
     /// [`protected_slug`] of `protected`; the id games put on the wire.
     pub slug: String,
+    /// Descriptive base-model relation, independent of this rendition's exact
+    /// approval and entitlement. None means unclassified.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_model_id: Option<String>,
     pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub author: Option<String>,
@@ -51,6 +58,7 @@ pub struct StoreAvatar {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 struct StoreDocument {
     schema: String,
+    namespace: String,
     avatars: Vec<StoreAvatar>,
 }
 
@@ -62,6 +70,9 @@ pub fn templates(avatars: &[EkzaAvatar], selector: &SupportSelector) -> Vec<Stor
     let mut seen = std::collections::HashSet::new();
     let mut items = Vec::new();
     for avatar in avatars {
+        if validate_base_model_id(&avatar.id, avatar.base_model_id.as_deref()).is_err() {
+            continue;
+        }
         if matches!(avatar.origin, AvatarOrigin::Library | AvatarOrigin::Local) {
             continue;
         }
@@ -102,6 +113,7 @@ pub fn templates(avatars: &[EkzaAvatar], selector: &SupportSelector) -> Vec<Stor
             if seen.insert(slug.clone()) {
                 items.push(StoreAvatar {
                     slug,
+                    base_model_id: avatar.base_model_id.clone(),
                     name: avatar.name.clone(),
                     author: avatar.author.clone(),
                     license: avatar.license.clone(),
@@ -135,6 +147,7 @@ pub fn templates_v2(items: &[CatalogV2Avatar], selector: &SupportSelector) -> Ve
 /// Re-validate a persisted or remote item: the slug must be the one derived
 /// from its own boundary, and the boundary must satisfy `selector`.
 pub fn validate_item(item: &StoreAvatar, selector: &SupportSelector) -> Result<(), &'static str> {
+    validate_base_model_id(&item.protected.avatar_id, item.base_model_id.as_deref())?;
     item.protected.validate_for(selector)?;
     if protected_slug(&item.protected) != item.slug {
         return Err("Store slug does not match its approved rendition");
@@ -162,6 +175,8 @@ mod runtime {
         sha256::sha256_hex,
     };
 
+    const MAX_CATALOG_BYTES: u64 = 8 * 1024 * 1024;
+
     /// See the [module docs](super).
     #[derive(Clone)]
     pub struct AvatarStore {
@@ -169,6 +184,7 @@ mod runtime {
         registry: RegistryClient,
         selector: SupportSelector,
         cache: AssetCache,
+        namespace: String,
     }
 
     impl AvatarStore {
@@ -178,13 +194,45 @@ mod runtime {
             registry_url: &str,
             selector: SupportSelector,
         ) -> Result<Self, String> {
-            let root = root.into();
+            let registry = RegistryClient::new(registry_url).map_err(|error| error.to_string())?;
+            Self::with_registry(root.into(), registry, selector)
+        }
+
+        /// Use the same verified store with catalogue redirects disabled.
+        /// Model downloads remain content-addressed and independently verified.
+        pub fn new_without_redirects(
+            root: impl Into<PathBuf>,
+            registry_url: &str,
+            selector: SupportSelector,
+        ) -> Result<Self, String> {
+            let registry = RegistryClient::new_without_redirects(registry_url)
+                .map_err(|error| error.to_string())?;
+            Self::with_registry(root.into(), registry, selector)
+        }
+
+        fn with_registry(
+            root: PathBuf,
+            registry: RegistryClient,
+            selector: SupportSelector,
+        ) -> Result<Self, String> {
+            let namespace = sha256_hex(
+                &serde_json::to_vec(&(
+                    registry.base_url(),
+                    "avatar",
+                    &selector.project_id,
+                    &selector.platform,
+                    &selector.profile,
+                    &selector.formats,
+                ))
+                .map_err(|error| error.to_string())?,
+            );
             Ok(Self {
-                registry: RegistryClient::new(registry_url).map_err(|error| error.to_string())?,
+                registry,
                 cache: AssetCache::new(root.join(".ekza-cache"))
                     .map_err(|error| error.to_string())?,
                 selector,
                 root,
+                namespace,
             })
         }
 
@@ -201,8 +249,12 @@ mod runtime {
             self.root.join("avatars").join(format!("{slug}.glb"))
         }
 
-        fn document_path(&self) -> PathBuf {
-            self.root.join("store.json")
+        /// Approval metadata is specific to the trusted Registry base URL and
+        /// complete consumer selector. The old origin-less `store.json` is not
+        /// imported: its approvals have no provable Registry authority. Existing
+        /// installed models and verified hash-cache bytes remain reusable.
+        pub fn catalogue_path(&self) -> PathBuf {
+            self.root.join(format!("avatars-{}.json", self.namespace))
         }
 
         /// Fetch the approved catalogue and persist it for offline starts.
@@ -226,22 +278,37 @@ mod runtime {
             };
             let document = StoreDocument {
                 schema: STORE_SCHEMA.into(),
+                namespace: self.namespace.clone(),
                 avatars: items.clone(),
             };
             let bytes = serde_json::to_vec_pretty(&document).map_err(|error| error.to_string())?;
-            atomic_write(&self.document_path(), &bytes).map_err(|error| error.to_string())?;
+            if bytes.len() as u64 > MAX_CATALOG_BYTES {
+                return Err("Avatar catalogue exceeds the persisted size limit".into());
+            }
+            atomic_write(&self.catalogue_path(), &bytes).map_err(|error| error.to_string())?;
             Ok(items)
         }
 
-        /// Last persisted catalogue; entries that no longer validate are dropped.
+        /// Last persisted catalogue for this Registry and selector. Metadata
+        /// copied from another namespace or legacy origin-less cache is refused.
+        /// Entries that no longer validate are dropped.
         pub fn cached(&self) -> Vec<StoreAvatar> {
-            let Ok(raw) = fs::read(self.document_path()) else {
+            let Ok(file) = fs::File::open(self.catalogue_path()) else {
                 return Vec::new();
             };
+            let mut raw = Vec::new();
+            if file
+                .take(MAX_CATALOG_BYTES + 1)
+                .read_to_end(&mut raw)
+                .is_err()
+                || raw.len() as u64 > MAX_CATALOG_BYTES
+            {
+                return Vec::new();
+            }
             let Ok(document) = serde_json::from_slice::<StoreDocument>(&raw) else {
                 return Vec::new();
             };
-            if document.schema != STORE_SCHEMA {
+            if document.schema != STORE_SCHEMA || document.namespace != self.namespace {
                 return Vec::new();
             }
             document
@@ -336,6 +403,7 @@ mod tests {
         EkzaAvatar {
             origin: AvatarOrigin::Registry,
             id: format!("solana:devnet:avatar-data:{}", key.to_string().repeat(32)),
+            base_model_id: None,
             name: name.into(),
             collection: None,
             author: Some("artist".into()),

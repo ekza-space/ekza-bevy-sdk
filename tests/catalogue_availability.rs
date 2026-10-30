@@ -75,9 +75,9 @@ fn outages_do_not_fall_back_or_overwrite_the_cached_catalogue() {
         let root = directory();
         let store = AvatarStore::new(&root, &url, SupportSelector::omoba_desktop()).unwrap();
         let previous = b"last complete catalogue must not be replaced";
-        fs::write(root.join("store.json"), previous).unwrap();
+        fs::write(store.catalogue_path(), previous).unwrap();
         assert!(store.refresh().is_err());
-        assert_eq!(fs::read(root.join("store.json")).unwrap(), previous);
+        assert_eq!(fs::read(store.catalogue_path()).unwrap(), previous);
         assert_eq!(handle.join().unwrap().len(), 1);
         fs::remove_dir_all(root).unwrap();
     }
@@ -88,11 +88,11 @@ fn a_healthy_empty_catalogue_replaces_stale_entries() {
     let (url, handle) = server(vec![(200, "", EMPTY.to_owned())]);
     let root = directory();
     let store = AvatarStore::new(&root, &url, SupportSelector::omoba_desktop()).unwrap();
-    fs::write(root.join("store.json"), b"stale").unwrap();
+    fs::write(store.catalogue_path(), b"stale").unwrap();
     assert!(store.refresh().unwrap().is_empty());
     assert!(store.cached().is_empty());
     assert!(
-        String::from_utf8(fs::read(root.join("store.json")).unwrap())
+        String::from_utf8(fs::read(store.catalogue_path()).unwrap())
             .unwrap()
             .contains("avatars")
     );
@@ -113,4 +113,30 @@ fn only_a_missing_v2_endpoint_uses_the_legacy_feed() {
     assert!(paths[0].starts_with("GET /v2/avatars?"));
     assert!(paths[1].starts_with("GET /v1/avatars "));
     fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn strict_store_does_not_follow_catalogue_redirects_or_replace_the_offline_copy() {
+    let other = TcpListener::bind("127.0.0.1:0").unwrap();
+    let other_url = format!("http://{}/v2/avatars", other.local_addr().unwrap());
+    drop(other);
+    for target in [other_url.as_str(), "/v1/avatars"] {
+        let headers = Box::leak(format!("Location: {target}\r\n").into_boxed_str());
+        let (url, handle) = server(vec![(302, headers, "{}".into())]);
+        let root = directory();
+        let store =
+            AvatarStore::new_without_redirects(&root, &url, SupportSelector::omoba_desktop())
+                .unwrap();
+        fs::write(store.catalogue_path(), b"last complete offline copy").unwrap();
+        assert!(
+            store.refresh().unwrap_err().contains("HTTP 302"),
+            "the original redirect must be returned without another request"
+        );
+        assert_eq!(
+            fs::read(store.catalogue_path()).unwrap(),
+            b"last complete offline copy"
+        );
+        assert_eq!(handle.join().unwrap().len(), 1);
+        fs::remove_dir_all(root).unwrap();
+    }
 }

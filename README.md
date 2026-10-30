@@ -22,6 +22,27 @@ All feeds normalize into one `catalog::EkzaAvatar` (`id`, `origin`, name,
 license, thumbnail, `renditions[]`, `project_support[]`), merged by identity
 with `catalog::merge_avatars`.
 
+The unified v2 feed may classify an avatar with `baseModelId`, a canonical
+`ekza:avatar:<lowercase UUID>` pointing to its base model. The SDK preserves this
+optional relation as `base_model_id: Option<String>` in `CatalogV2Avatar`,
+`EkzaAvatar` and `StoreAvatar`, including normalized JSON and offline store
+metadata. Missing or null means **unclassified**; legacy feeds produce `None`.
+Malformed v2 relations and self-references reject the response, preserving the
+last complete store catalogue. A parent does not grant publication, game
+approval, ownership or compatibility to a child; the child's own rendition and
+approval remain mandatory. Canonical IDs, hashes and protected slugs are unchanged.
+
+This optional wire-field addition is a Rust source compatibility change: when
+upgrading the SDK, downstream code constructing any of these three public structs
+with a struct literal must add `base_model_id: None` (or an explicit relation).
+Previously serialized records without the field continue to deserialize.
+
+`RegistryClient::new_without_redirects` and `AvatarStore::new_without_redirects`
+keep public catalogue reads at their operator-selected endpoint. They never follow
+HTTP redirects or turn a redirect into a legacy-feed fallback. Asset downloads
+continue to use the verified content-addressed cache; existing constructors keep
+their original transport behavior.
+
 ## Quick start: sync all avatars into a game
 
 ```bash

@@ -92,6 +92,11 @@ pub struct EkzaAvatar {
     pub origin: AvatarOrigin,
     /// Raw feed identity (see [`AvatarOrigin`]).
     pub id: String,
+    /// Optional canonical base-model identity. Descriptive classification only:
+    /// it never grants this avatar the parent's approvals or entitlements.
+    /// Missing/null means unclassified; legacy feeds do not infer a parent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_model_id: Option<String>,
     pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub collection: Option<String>,
@@ -300,6 +305,7 @@ impl From<LibraryAvatar> for EkzaAvatar {
         EkzaAvatar {
             origin: AvatarOrigin::Library,
             id: item.id,
+            base_model_id: None,
             name: item.name,
             collection: item.collection_name.or(item.collection_id),
             author: item.author,
@@ -463,6 +469,7 @@ impl RegistryAvatar {
         EkzaAvatar {
             origin: AvatarOrigin::Registry,
             id: self.id,
+            base_model_id: None,
             name: self.name,
             collection: self
                 .provenance
@@ -537,10 +544,14 @@ pub struct CatalogV2Creator {
 /// published through Ekza Studio in one shape. `access` is `"free"` when a game
 /// may admit the avatar with no ownership proof, `"owned"` when wearing it needs a
 /// passport ticket. Anything else is treated as owned.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CatalogV2Avatar {
     pub id: String,
+    /// Canonical `ekza:avatar:<uuid>` of the base model, when classified.
+    /// Does not imply compatibility, publication, approval or ownership.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_model_id: Option<String>,
     pub name: String,
     #[serde(default)]
     pub description: Option<String>,
@@ -556,6 +567,57 @@ pub struct CatalogV2Avatar {
     pub renditions: Vec<CatalogV2Rendition>,
     #[serde(default)]
     pub project_support: Vec<ProjectApproval>,
+}
+
+// Serde's remote derive builds the public record without changing its field
+// access API. Validate after both identity fields are known, including account
+// library ingestion; a malformed relation must not become an unclassified item.
+#[derive(Deserialize)]
+#[serde(remote = "CatalogV2Avatar", rename_all = "camelCase")]
+struct CatalogV2AvatarWire {
+    id: String,
+    #[serde(default)]
+    base_model_id: Option<String>,
+    name: String,
+    #[serde(default)]
+    description: Option<String>,
+    #[serde(default)]
+    thumbnail_url: Option<String>,
+    #[serde(default)]
+    license: Option<CatalogV2License>,
+    #[serde(default)]
+    creator: Option<CatalogV2Creator>,
+    #[serde(default)]
+    access: String,
+    #[serde(default)]
+    renditions: Vec<CatalogV2Rendition>,
+    #[serde(default)]
+    project_support: Vec<ProjectApproval>,
+}
+
+impl<'de> Deserialize<'de> for CatalogV2Avatar {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let avatar = CatalogV2AvatarWire::deserialize(deserializer)?;
+        validate_base_model_id(&avatar.id, avatar.base_model_id.as_deref())
+            .map_err(serde::de::Error::custom)?;
+        Ok(avatar)
+    }
+}
+
+pub(crate) fn validate_base_model_id(
+    avatar_id: &str,
+    base_model_id: Option<&str>,
+) -> Result<(), &'static str> {
+    let Some(parent) = base_model_id else {
+        return Ok(());
+    };
+    if !parent.starts_with("ekza:avatar:") || crate::passport::validate_avatar_id(parent).is_err() {
+        return Err("Base model must have a canonical ekza:avatar UUID identity");
+    }
+    if parent == avatar_id {
+        return Err("An avatar cannot be its own base model");
+    }
+    Ok(())
 }
 
 /// `GET /v2/avatars` response.
@@ -576,6 +638,7 @@ impl CatalogV2Avatar {
         EkzaAvatar {
             origin: AvatarOrigin::Registry,
             id: self.id,
+            base_model_id: self.base_model_id,
             name: self.name,
             collection: Some("Ekza".into()),
             author: self
@@ -657,6 +720,7 @@ impl From<PassportCatalogItem> for EkzaAvatar {
         EkzaAvatar {
             origin: AvatarOrigin::Passport,
             id: item.avatar_id,
+            base_model_id: None,
             name: item.name,
             collection: Some("Ekza avatars".into()),
             author: None,
@@ -677,6 +741,7 @@ impl From<&PurchasedAvatar> for EkzaAvatar {
         EkzaAvatar {
             origin: AvatarOrigin::Passport,
             id: item.avatar_id.clone(),
+            base_model_id: None,
             name: item.name.clone(),
             collection: Some("Ekza purchased avatars".into()),
             author: None,
@@ -723,6 +788,9 @@ impl EkzaAvatar {
         }
         if self.collection.is_none() {
             self.collection = other.collection;
+        }
+        if self.base_model_id.is_none() {
+            self.base_model_id = other.base_model_id;
         }
         if self.author.is_none() {
             self.author = other.author;
@@ -853,6 +921,7 @@ mod tests {
         let avatar = EkzaAvatar {
             origin: AvatarOrigin::Library,
             id: "00df253c-4665-4cbf-b420-761a1cc4f9dd".into(),
+            base_model_id: None,
             name: "Ведьма".into(),
             collection: None,
             author: None,

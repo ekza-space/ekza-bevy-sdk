@@ -169,6 +169,20 @@ impl RegistryClient {
         })
     }
 
+    /// Keep catalogue authority at the configured endpoint. Verified asset
+    /// downloads retain their separate transport policy.
+    pub fn new_without_redirects(base_url: &str) -> Result<Self, RegistryError> {
+        let base = feed_url(base_url)?;
+        let client = Client::builder()
+            .redirect(Policy::none())
+            .connect_timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(30))
+            .user_agent(concat!("ekza-bevy-sdk/", env!("CARGO_PKG_VERSION")))
+            .build()
+            .map_err(|error| RegistryError::Transport(error.to_string()))?;
+        Ok(Self { base, client })
+    }
+
     pub fn default_registry() -> Result<Self, RegistryError> {
         Self::new(DEFAULT_REGISTRY_URL)
     }
