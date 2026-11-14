@@ -89,6 +89,10 @@ pub struct StoreAsset {
     pub author: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub license: Option<String>,
+    /// The licence's credit line (`license.attribution`), which CC-BY and
+    /// similar licences require games to show with the item. `None` when blank.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attribution: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub thumbnail_url: Option<String>,
     pub support: ProjectSupport,
@@ -152,6 +156,73 @@ pub fn templates(
     kind: AssetKind,
     selector: &SupportSelector,
 ) -> Vec<StoreAsset> {
+    select(assets, kind, selector)
+}
+
+/// Why an asset is in an account library (`library.reason` on the wire).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LibraryReason {
+    Created,
+    Saved,
+    Claimed,
+}
+
+/// One entry of an account library's `assets` array: a `/v2/assets` item that
+/// the account created, saved or claimed. Listing grants no paid ownership.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LibraryAsset {
+    pub asset: CatalogAsset,
+    /// `None` when the registry gave no reason, or one this SDK does not know.
+    pub reason: Option<LibraryReason>,
+}
+
+impl LibraryAsset {
+    /// One wire entry. Unknown kinds, malformed items and identities that do
+    /// not match their kind are `None`; unknown fields are ignored.
+    fn parse(entry: &serde_json::Value) -> Option<Self> {
+        let asset = CatalogAsset::deserialize(entry).ok()?;
+        validate_asset_id(asset.asset_kind, &asset.id).ok()?;
+        let reason = entry
+            .get("library")
+            .and_then(|library| library.get("reason"))
+            .and_then(|reason| LibraryReason::deserialize(reason).ok());
+        Some(Self { asset, reason })
+    }
+}
+
+/// `#[serde(deserialize_with)]` helper for an account library's additive
+/// `assets` array. Entries are parsed one at a time: a bad entry is skipped,
+/// never the document. A null or non-array value means no assets. Wire order
+/// is kept. Like `/v2/assets`, the library lists one entry per visible
+/// revision, so an id can repeat with other approvals and renditions; every
+/// entry is kept and selection dedupes by slug, as [`templates`] does.
+pub fn deserialize_library_assets<'de, D>(deserializer: D) -> Result<Vec<LibraryAsset>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let serde_json::Value::Array(entries) = serde_json::Value::deserialize(deserializer)? else {
+        return Ok(Vec::new());
+    };
+    Ok(entries.iter().filter_map(LibraryAsset::parse).collect())
+}
+
+/// [`templates`] over library entries: the same free, exact-approval and
+/// identity checks as the public catalogue, so results install through an
+/// `AssetStore` of the same kind and selector.
+pub fn library_templates(
+    entries: &[LibraryAsset],
+    kind: AssetKind,
+    selector: &SupportSelector,
+) -> Vec<StoreAsset> {
+    select(entries.iter().map(|entry| &entry.asset), kind, selector)
+}
+
+fn select<'a>(
+    assets: impl IntoIterator<Item = &'a CatalogAsset>,
+    kind: AssetKind,
+    selector: &SupportSelector,
+) -> Vec<StoreAsset> {
     let mut seen = std::collections::HashSet::new();
     let mut result = Vec::new();
     for asset in assets {
@@ -183,6 +254,7 @@ pub fn templates(
                 name: asset.name.clone(),
                 author: asset.creator.as_ref().map(|creator| creator.name.clone()),
                 license: asset.license.as_ref().map(|license| license.text.clone()),
+                attribution: asset.license.as_ref().and_then(CatalogV2License::credit),
                 thumbnail_url: asset.thumbnail_url.clone(),
                 support: ProjectSupport {
                     project_id: approval.project_id.clone(),
@@ -420,5 +492,184 @@ mod runtime {
             size_bytes: Some(rendition.size_bytes),
             media_type: None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[derive(Deserialize)]
+    struct Library {
+        #[serde(default, deserialize_with = "deserialize_library_assets")]
+        assets: Vec<LibraryAsset>,
+    }
+
+    fn parse(assets: serde_json::Value) -> Vec<LibraryAsset> {
+        serde_json::from_value::<Library>(json!({ "assets": assets }))
+            .unwrap()
+            .assets
+    }
+
+    fn weapon(uuid: &str, library: serde_json::Value) -> serde_json::Value {
+        json!({
+            "assetKind":"weapon", "id":format!("ekza:weapon:{uuid}"), "name":"Wildspark set",
+            "access":"free", "library":library, "futureField":{"ignored":true},
+            "projectSupport":[{"projectId":"omoba","platform":"desktop","profile":"handheld-glb-v1",
+                "status":"approved","requirementId":"wildspark.handheld.set"}],
+            "renditions":[{"platform":"desktop","profile":"handheld-glb-v1","profileVersion":"1",
+                "format":"glb","sha256":"ab".repeat(32),"sizeBytes":4096,
+                "downloadUrl":"https://registry.ekza.io/v1/studio/assets/x/rendition"}]
+        })
+    }
+
+    fn catalogue(entries: &[LibraryAsset]) -> Vec<CatalogAsset> {
+        entries.iter().map(|entry| entry.asset.clone()).collect()
+    }
+
+    #[test]
+    fn library_assets_parse_one_entry_at_a_time() {
+        let first = "11111111-2222-4333-8444-555555555555";
+        let second = "22222222-2222-4333-8444-555555555555";
+        let entries = parse(json!([
+            weapon(first, json!({"reason":"claimed"})),
+            {"assetKind":"emote", "id":"ekza:emote:x", "name":"Dance"},
+            {"assetKind":"weapon", "id":format!("ekza:avatar:{second}"), "name":"Mismatch"},
+            weapon(first, json!({"reason":"claimed"})),
+            weapon(second, json!("claimed")),
+            7,
+        ]));
+        let parsed: Vec<_> = entries
+            .iter()
+            .map(|entry| (entry.asset.id.as_str(), entry.reason))
+            .collect();
+        let first_id = "ekza:weapon:11111111-2222-4333-8444-555555555555";
+        // A repeated id is kept; selection below dedupes it by slug.
+        assert_eq!(
+            parsed,
+            [
+                (first_id, Some(LibraryReason::Claimed)),
+                (first_id, Some(LibraryReason::Claimed)),
+                ("ekza:weapon:22222222-2222-4333-8444-555555555555", None),
+            ]
+        );
+        for empty in [json!(null), json!({}), json!("assets"), json!([])] {
+            assert!(parse(empty).is_empty());
+        }
+        assert!(
+            serde_json::from_value::<Library>(json!({}))
+                .unwrap()
+                .assets
+                .is_empty()
+        );
+
+        let selector = SupportSelector::new("omoba", "desktop", "handheld-glb-v1", &["glb"]);
+        let owned = library_templates(&entries, AssetKind::Weapon, &selector);
+        assert_eq!(owned.len(), 2);
+        assert_eq!(
+            owned,
+            templates(&catalogue(&entries), AssetKind::Weapon, &selector)
+        );
+        assert!(library_templates(&entries, AssetKind::Avatar, &selector).is_empty());
+    }
+
+    #[test]
+    fn every_listed_revision_of_one_asset_is_kept() {
+        // A newer revision approved for android, listed ahead of the revision
+        // desktop still pins: each platform must find its own.
+        let uuid = "11111111-2222-4333-8444-555555555555";
+        let revision = |platform: &str, sha: &str| {
+            let mut entry = weapon(uuid, json!({"reason":"claimed"}));
+            entry["projectSupport"][0]["platform"] = json!(platform);
+            entry["renditions"][0]["platform"] = json!(platform);
+            entry["renditions"][0]["sha256"] = json!(sha.repeat(32));
+            entry
+        };
+        let entries = parse(json!([
+            revision("android", "cd"),
+            revision("desktop", "ab")
+        ]));
+        assert_eq!(entries.len(), 2);
+        let catalogue = catalogue(&entries);
+        for (platform, sha) in [("desktop", "ab"), ("android", "cd")] {
+            let selector = SupportSelector::new("omoba", platform, "handheld-glb-v1", &["glb"]);
+            let owned = library_templates(&entries, AssetKind::Weapon, &selector);
+            assert_eq!(owned, templates(&catalogue, AssetKind::Weapon, &selector));
+            assert_eq!(owned.len(), 1, "{platform}");
+            assert_eq!(owned[0].support.platform, platform);
+            assert_eq!(owned[0].support.rendition.sha256, sha.repeat(32));
+            assert_eq!(
+                owned[0].slug,
+                asset_slug(AssetKind::Weapon, &owned[0].asset_id, &sha.repeat(32))
+            );
+        }
+    }
+
+    #[test]
+    fn the_licence_credit_line_reaches_store_items() {
+        let selector = SupportSelector::new("omoba", "desktop", "handheld-glb-v1", &["glb"]);
+        let licensed = |uuid: &str, license: serde_json::Value| {
+            let mut entry = weapon(uuid, json!({"reason":"claimed"}));
+            entry["creator"] = json!({"name": "alice"});
+            entry["license"] = license;
+            entry
+        };
+        let entries = parse(json!([
+            licensed(
+                "11111111-2222-4333-8444-555555555555",
+                json!({"text":"CC-BY-4.0","attribution":" Model by Alice Example "})
+            ),
+            licensed(
+                "22222222-2222-4333-8444-555555555555",
+                json!({"text":"CC0-1.0","attribution":"  "})
+            ),
+            licensed(
+                "33333333-2222-4333-8444-555555555555",
+                json!({"text":"CC0-1.0"})
+            ),
+            licensed("44444444-2222-4333-8444-555555555555", json!(null)),
+        ]));
+        let owned = library_templates(&entries, AssetKind::Weapon, &selector);
+        assert_eq!(
+            owned,
+            templates(&catalogue(&entries), AssetKind::Weapon, &selector)
+        );
+        let credits: Vec<_> = owned
+            .iter()
+            .map(|item| {
+                (
+                    item.author.as_deref(),
+                    item.license.as_deref(),
+                    item.attribution.as_deref(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            credits,
+            [
+                (
+                    Some("alice"),
+                    Some("CC-BY-4.0"),
+                    Some("Model by Alice Example")
+                ),
+                (Some("alice"), Some("CC0-1.0"), None),
+                (Some("alice"), Some("CC0-1.0"), None),
+                (Some("alice"), None, None),
+            ]
+        );
+        // Store metadata round-trips it; files from older SDKs lack the key.
+        let text = serde_json::to_string(&owned[0]).unwrap();
+        assert_eq!(serde_json::from_str::<StoreAsset>(&text).unwrap(), owned[0]);
+        let older = text.replace(r#""attribution":"Model by Alice Example","#, "");
+        assert_ne!(older, text);
+        let older: StoreAsset = serde_json::from_str(&older).unwrap();
+        assert_eq!(older.attribution, None);
+        assert!(validate_item(&older, AssetKind::Weapon, &selector).is_ok());
+        assert!(
+            !serde_json::to_string(&owned[1])
+                .unwrap()
+                .contains("attribution")
+        );
     }
 }

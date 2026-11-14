@@ -1,13 +1,15 @@
 //! Connect this terminal to an Ekza account and list the library for a game.
 //!
 //! ```text
-//! cargo run --example account_pair -- http://127.0.0.1:8137 omoba desktop humanoid-glb-v1
+//! cargo run --example account_pair -- http://127.0.0.1:8137 omoba desktop humanoid-glb-v1 handheld-glb-v1
 //! ```
 //! Open the printed link, sign in to Ekza Studio and confirm the code. No wallet.
+//! The optional fifth argument is the weapon profile listed from the library's assets.
 use std::time::Duration;
 
 use ekza_bevy_sdk::{
     account::{AccountClient, AccountFlow},
+    assets::AssetKind,
     passport::{SupportSelector, pairing::PairingState},
     registry::DEFAULT_REGISTRY_URL,
 };
@@ -20,6 +22,8 @@ fn main() -> Result<(), String> {
     let project = args.next().unwrap_or_else(|| "omoba".to_owned());
     let platform = args.next().unwrap_or_else(|| "desktop".to_owned());
     let profile = args.next().unwrap_or_else(|| "humanoid-glb-v1".to_owned());
+    let weapon_profile = args.next().unwrap_or_else(|| "handheld-glb-v1".to_owned());
+    let weapons = SupportSelector::new(&project, &platform, &weapon_profile, &["glb"]);
     let selector = SupportSelector::new(&project, &platform, &profile, &["glb", "vrm"]);
     let flow = AccountFlow::start(AccountClient::new(&registry, &project)?, selector);
     let mut shown = false;
@@ -58,5 +62,25 @@ fn main() -> Result<(), String> {
         );
     }
     println!("library {} avatar(s)", session.items.len());
+    for entry in session.library_assets() {
+        println!(
+            "asset {} {} {:?} reason={:?}",
+            entry.asset.asset_kind.as_str(),
+            entry.asset.id,
+            entry.asset.name,
+            entry.reason
+        );
+    }
+    for item in session.assets(AssetKind::Weapon, &weapons) {
+        println!(
+            "weapon {} {} {} bytes",
+            item.slug, item.name, item.support.rendition.size_bytes
+        );
+    }
+    println!(
+        "library {} asset entries (one per revision), {} installable weapon(s) for {weapon_profile}",
+        session.library_assets().len(),
+        session.assets(AssetKind::Weapon, &weapons).len()
+    );
     Ok(())
 }

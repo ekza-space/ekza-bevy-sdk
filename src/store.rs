@@ -21,7 +21,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    catalog::{AvatarOrigin, CatalogV2Avatar, EkzaAvatar},
+    catalog::{AvatarOrigin, CatalogV2Avatar, CatalogV2License, EkzaAvatar},
     passport::{ProjectSupport, ProtectedAvatar, Rendition, SupportSelector, protected_slug},
 };
 
@@ -38,6 +38,11 @@ pub struct StoreAvatar {
     pub author: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub license: Option<String>,
+    /// The licence's credit line from the unified feed (`license.attribution`),
+    /// which CC-BY and similar licences require games to show. The legacy
+    /// `/v1/avatars` feed folds it into `author` instead, so it is `None` there.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attribution: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub thumbnail_url: Option<String>,
     pub protected: ProtectedAvatar,
@@ -105,6 +110,7 @@ pub fn templates(avatars: &[EkzaAvatar], selector: &SupportSelector) -> Vec<Stor
                     name: avatar.name.clone(),
                     author: avatar.author.clone(),
                     license: avatar.license.clone(),
+                    attribution: None,
                     thumbnail_url: avatar.thumbnail_url.clone(),
                     protected,
                     free: false,
@@ -122,8 +128,10 @@ pub fn templates_v2(items: &[CatalogV2Avatar], selector: &SupportSelector) -> Ve
     let mut result = Vec::new();
     for item in items {
         let free = item.is_free();
+        let attribution = item.license.as_ref().and_then(CatalogV2License::credit);
         for mut template in templates(&[item.clone().into_avatar()], selector) {
             template.free = free;
+            template.attribution = attribution.clone();
             if seen.insert(template.slug.clone()) {
                 result.push(template);
             }
@@ -458,6 +466,45 @@ mod tests {
         // A document written by an older SDK has no such key.
         let legacy = text.replace(",\"free\":true", "");
         assert!(!serde_json::from_str::<StoreAvatar>(&legacy).unwrap().free);
+    }
+
+    #[test]
+    fn unified_feed_carries_the_licence_credit_line() {
+        let studio = "ekza:avatar:2f0c1f0e-7b1a-4c55-9d53-0a6d3c1b9e77";
+        let selector = SupportSelector::omoba_desktop();
+        let mut credited = unified("free", studio, "omoba");
+        credited.license.as_mut().unwrap().attribution = " Model by Alice Example ".into();
+        let mut blank = credited.clone();
+        blank.license.as_mut().unwrap().attribution = "  ".into();
+        let mut unlicensed = credited.clone();
+        unlicensed.license = None;
+        let item = templates_v2(&[credited], &selector).remove(0);
+        // The credit line is its own field, not the creator.
+        assert_eq!(item.attribution.as_deref(), Some("Model by Alice Example"));
+        assert_eq!(item.author.as_deref(), Some("alice"));
+        assert_eq!(item.license.as_deref(), Some("CC0"));
+        for item in [blank, unlicensed] {
+            assert_eq!(templates_v2(&[item], &selector)[0].attribution, None);
+        }
+        // The legacy feed folds attribution into `author`.
+        let legacy = templates(&[template("Robert", '1', 'a')], &selector);
+        assert_eq!(legacy[0].attribution, None);
+        assert!(
+            !serde_json::to_string(&legacy[0])
+                .unwrap()
+                .contains("attribution")
+        );
+        // Persisted store documents round-trip it; older ones simply lack it.
+        let text = serde_json::to_string(&item).unwrap();
+        assert!(text.contains(r#""attribution":"Model by Alice Example""#));
+        assert_eq!(serde_json::from_str::<StoreAvatar>(&text).unwrap(), item);
+        let older = text.replace(r#""attribution":"Model by Alice Example","#, "");
+        assert_eq!(
+            serde_json::from_str::<StoreAvatar>(&older)
+                .unwrap()
+                .attribution,
+            None
+        );
     }
 
     #[test]
