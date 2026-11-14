@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — Bevy 0.20
+
+- Upgrade the optional Bevy integration to exactly Bevy 0.20.1 (`=0.20.1`) and
+  Rust 1.97.1. Model handles, GLB scene labels and HTTP-only consumer features
+  are unchanged; a future 0.20 patch cannot be selected implicitly.
+
 ## Unreleased — 2026-10-11 account library assets
 
 - Read the account library's additive `assets` array (every kind, `/v2/assets`
